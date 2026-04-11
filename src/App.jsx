@@ -1,8 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 
-// ─── Put your Anthropic API key in .env.local as:
-//     VITE_ANTHROPIC_API_KEY=sk-ant-...
-const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
 
 const EMOJIS = {
   milk:"🥛",leche:"🥛",bread:"🍞",pan:"🍞",egg:"🥚",eggs:"🥚",huevos:"🥚",
@@ -120,13 +117,10 @@ export default function ShoppingList() {
     try {
       const base64 = await fileToBase64(file);
       const mediaType = file.type || "image/jpeg";
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/scan", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": API_KEY,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
           model: "claude-opus-4-5",
