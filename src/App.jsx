@@ -117,15 +117,22 @@ export default function ShoppingList() {
     try {
       const base64 = await fileToBase64(file);
       const mediaType = file.type || "image/jpeg";
-      const response = await fetch("/api/scan", {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": "Bearer " + import.meta.env.VITE_OPENAI_API_KEY,
         },
         body: JSON.stringify({
-          mediaType,
-          imageData: base64,
-          prompt: `Extract any shopping list items from this image. Return ONLY a JSON array, no markdown, no explanation. Each object: {"name":"item name","qty":"quantity if visible else empty string"}. Example: [{"name":"Milk","qty":"2L"},{"name":"Bread","qty":""}]. If nothing found return [].`
+          model: "gpt-4o",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64}` } },
+              { type: "text", text: `Extract any shopping list items from this image. Return ONLY a JSON array, no markdown, no explanation. Each object: {"name":"item name","qty":"quantity if visible else empty string"}. Example: [{"name":"Milk","qty":"2L"},{"name":"Bread","qty":""}]. If nothing found return [].` }
+            ]
+          }]
         })
       });
       const data = await response.json();
