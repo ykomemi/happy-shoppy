@@ -123,19 +123,13 @@ export default function ShoppingList() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-              { type: "text", text: `Extract any shopping list items from this image. Return ONLY a JSON array, no markdown, no explanation. Each object: {"name":"item name","qty":"quantity if visible else empty string"}. Example: [{"name":"Milk","qty":"2L"},{"name":"Bread","qty":""}]. If nothing found return [].` }
-            ]
-          }]
+          mediaType,
+          imageData: base64,
+          prompt: `Extract any shopping list items from this image. Return ONLY a JSON array, no markdown, no explanation. Each object: {"name":"item name","qty":"quantity if visible else empty string"}. Example: [{"name":"Milk","qty":"2L"},{"name":"Bread","qty":""}]. If nothing found return [].`
         })
       });
       const data = await response.json();
-      const text = data.content?.find(b => b.type === "text")?.text || "[]";
+      const text = data.choices?.[0]?.message?.content || "[]";
       const clean = text.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(clean);
       if (!Array.isArray(parsed) || parsed.length === 0) {
