@@ -261,7 +261,6 @@ export default function App() {
   // ── List Page ───────────────────────────────────────────────────────────────
   const ListPage = () => (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImage} />
 
       {loading && (
         <div style={{
@@ -305,7 +304,7 @@ export default function App() {
             <>
               <div onClick={() => setShowMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 199 }} />
               <div style={{
-                position: "absolute", bottom: 60, right: 0, background: T.surface, borderRadius: 16,
+                position: "absolute", top: 60, right: 0, background: T.surface, borderRadius: 16,
                 boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden", zIndex: 200,
                 minWidth: 200, animation: "popIn 0.18s cubic-bezier(.34,1.56,.64,1)",
                 border: isDark ? "1px solid rgba(255,255,255,0.1)" : "none",
@@ -468,6 +467,8 @@ export default function App() {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ fontFamily: T.font, background: T.bg, minHeight: "100vh", maxWidth: 430, margin: "0 auto", paddingBottom: 64 }}>
+
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImage} />
 
       {/* Confetti */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999, overflow: "hidden" }}>
