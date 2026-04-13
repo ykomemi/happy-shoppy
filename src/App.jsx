@@ -83,7 +83,7 @@ function persist(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
-// ─── ITEM ROW (outside App so React never remounts it on re-render) ──────────
+// ─── ITEM ROW ────────────────────────────────────────────────────────────────
 function ItemRow({ item, onToggle, onDelete, T, isDark }) {
   return (
     <div style={{
@@ -118,198 +118,9 @@ function ItemRow({ item, onToggle, onDelete, T, isDark }) {
   );
 }
 
-// ─── APP ─────────────────────────────────────────────────────────────────────
-export default function App() {
-  const [page, setPage] = useState("list");
-  const [items, setItems] = useState(() => load("shopItems", []));
-  const [history, setHistory] = useState(() => load("shopHistory", []));
-  const [settings, setSettings] = useState(() => load("shopSettings", { theme: "default", historyLimit: 3 }));
-  const [memory, setMemory] = useState(() => load("shopMemory", []));
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [toast, setToast] = useState(null);
-  const [doneOpen, setDoneOpen] = useState(false);
-  const [confetti, setConfetti] = useState([]);
-  const [showMenu, setShowMenu] = useState(false);
-  const fileRef = useRef();
-  const toastTimer = useRef();
-  const voiceRef = useRef(null);
-  const voiceTimer = useRef(null);
-
-  const T = THEMES[settings.theme] || THEMES.default;
-  const isDark = settings.theme === "space";
-
-  useEffect(() => { persist("shopItems", items); }, [items]);
-  useEffect(() => { persist("shopHistory", history); }, [history]);
-  useEffect(() => { persist("shopSettings", settings); }, [settings]);
-  useEffect(() => { persist("shopMemory", memory); }, [memory]);
-
-  // Confetti trigger on all-done
-  const prevAllDone = useRef(false);
-  useEffect(() => {
-    const total = items.length;
-    const doneCount = items.filter(i => i.done).length;
-    const allDone = total > 0 && doneCount === total;
-    if (allDone && !prevAllDone.current) triggerConfetti();
-    prevAllDone.current = allDone;
-  }, [items]);
-
-  // Autocomplete suggestions
-  const suggestions = input.length >= 2
-    ? memory.filter(m => m.toLowerCase().includes(input.toLowerCase())).slice(0, 15)
-    : [];
-
-  function showToast(msg) {
-    setToast(msg);
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2500);
-  }
-
-  function triggerConfetti() {
-    const colors = [T.primary, T.secondary, T.accent, "#f9ca24", "#fd79a8"];
-    const pieces = Array.from({ length: 60 }, (_, i) => ({
-      id: i, color: colors[i % colors.length],
-      left: Math.random() * 100, delay: Math.random() * 0.6,
-      dur: 1.8 + Math.random() * 1.5, round: Math.random() > 0.5,
-    }));
-    setConfetti(pieces);
-    showToast("🎉 All done! Great job!");
-    setTimeout(() => setConfetti([]), 4500);
-  }
-
-  function addItem(name, qty = "") {
-    if (!name.trim()) return;
-    const trimmed = name.trim();
-    setItems(prev => [{ id: Date.now() + Math.random(), name: trimmed, qty, emoji: getEmoji(trimmed), done: false }, ...prev]);
-    setMemory(prev => [trimmed, ...prev.filter(m => m.toLowerCase() !== trimmed.toLowerCase())].slice(0, 100));
-  }
-
-  function addManual() {
-    if (!input.trim()) return;
-    addItem(input);
-    setInput("");
-    showToast("✅ Added!");
-  }
-
-  function toggle(id) {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
-  }
-
-  function deleteItem(id) {
-    setItems(prev => prev.filter(i => i.id !== id));
-  }
-
-  function clearAll() {
-    if (items.length === 0) return;
-    const entry = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-      items: [...items],
-    };
-    setHistory(prev => [entry, ...prev].slice(0, settings.historyLimit));
-    setItems([]);
-    showToast("Saved to history");
-  }
-
-  function restoreList(entry) {
-    setItems(entry.items.map(i => ({ ...i, done: false })));
-    setPage("list");
-    showToast("✅ List restored!");
-  }
-
-  function shareList() {
-    const todo = items.filter(i => !i.done);
-    const done = items.filter(i => i.done);
-    let text = T.icon + " " + T.title + "\n\n";
-    if (todo.length) text += todo.map(i => i.emoji + " " + i.name + (i.qty ? " – " + i.qty : "")).join("\n");
-    if (done.length) text += "\n\n✅ Done:\n" + done.map(i => "✓ " + i.name).join("\n");
-    navigator.clipboard.writeText(text).then(() => showToast("📋 Copied!")).catch(() => showToast("Couldn't copy"));
-  }
-
-  function startVoice() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { showToast("Voice not supported on this browser"); return; }
-
-    // Stop if already listening
-    if (listening) {
-      try { voiceRef.current?.stop(); } catch {}
-      return;
-    }
-
-    const recognition = new SR();
-    voiceRef.current = recognition;
-    recognition.lang = navigator.language || "en-US";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => setListening(true);
-    recognition.onend = () => { setListening(false); clearTimeout(voiceTimer.current); };
-    recognition.onerror = () => { setListening(false); showToast("Voice not supported on this browser"); };
-    recognition.onresult = (event) => {
-      const text = event.results[0][0].transcript.trim();
-      if (/\band\b|,|\n/i.test(text)) {
-        const parts = text.split(/\band\b|,|\n/i).map(s => s.trim()).filter(Boolean);
-        parts.forEach(p => addItem(p));
-        showToast("✨ Added " + parts.length + " items!");
-      } else {
-        setInput(text);
-      }
-    };
-
-    try {
-      recognition.start();
-      voiceTimer.current = setTimeout(() => { try { recognition.stop(); } catch {} }, 5000);
-    } catch {
-      showToast("Voice not supported on this browser");
-    }
-  }
-
-  async function handleImage(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = "";
-    setLoading(true);
-    try {
-      const base64 = await fileToBase64(file);
-      const mediaType = file.type || "image/jpeg";
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + import.meta.env.VITE_OPENAI_API_KEY,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o", max_tokens: 1000,
-          messages: [{ role: "user", content: [
-            { type: "image_url", image_url: { url: "data:" + mediaType + ";base64," + base64 } },
-            { type: "text", text: 'Extract any shopping list items from this image. Return ONLY a JSON array, no markdown, no explanation. Each object: {"name":"item name","qty":"quantity if visible else empty string"}. Example: [{"name":"Milk","qty":"2L"},{"name":"Bread","qty":""}]. If nothing found return [].' }
-          ]}]
-        })
-      });
-      const data = await response.json();
-      const text = data.choices?.[0]?.message?.content || "[]";
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        showToast("🤔 No items found in image");
-      } else {
-        parsed.forEach(item => addItem(item.name, item.qty || ""));
-        showToast("✨ Added " + parsed.length + " items!");
-      }
-    } catch (err) {
-      console.error(err);
-      showToast("❌ Couldn't read image");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const todo = items.filter(i => !i.done);
-  const done = items.filter(i => i.done);
-  const pct = items.length ? Math.round(done.length / items.length * 100) : 0;
-  const pageTitles = { list: T.title, history: "History", settings: "Settings" };
-
-  const listPageJSX = (
+// ─── LIST PAGE ───────────────────────────────────────────────────────────────
+function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen }) {
+  return (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
       {loading && (
         <div style={{
@@ -404,24 +215,19 @@ export default function App() {
 
         {/* Autocomplete chips */}
         {suggestions.length > 0 && (
-          <div style={{
-            display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginTop: 8,
-            scrollbarWidth: "none",
-          }}>
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginTop: 8, scrollbarWidth: "none" }}>
             {suggestions.map((s, i) => (
               <button key={i} onClick={() => { addItem(s); setInput(""); showToast("✅ Added!"); }} style={{
                 flexShrink: 0, background: isDark ? "rgba(255,255,255,0.1)" : T.primaryLight,
                 color: isDark ? "rgba(255,255,255,0.85)" : T.primaryDark,
                 border: "none", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                padding: "5px 12px", cursor: "pointer", fontFamily: T.font,
-                whiteSpace: "nowrap",
+                padding: "5px 12px", cursor: "pointer", fontFamily: T.font, whiteSpace: "nowrap",
               }}>{getEmoji(s)} {s}</button>
             ))}
           </div>
         )}
       </div>
 
-      {/* To buy section */}
       {(todo.length > 0 || done.length > 0) && (
         <div style={{ fontSize: 12, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, marginBottom: 8, textTransform: "uppercase" }}>
           To buy · {todo.length}
@@ -452,8 +258,11 @@ export default function App() {
       )}
     </div>
   );
+}
 
-  const historyPageJSX = (
+// ─── HISTORY PAGE ─────────────────────────────────────────────────────────────
+function HistoryPage({ T, isDark, history, restoreList }) {
+  return (
     <div style={{ padding: "16px", fontFamily: T.font }}>
       {history.length === 0 ? (
         <div style={{ textAlign: "center", padding: "50px 20px" }}>
@@ -493,8 +302,11 @@ export default function App() {
       ))}
     </div>
   );
+}
 
-  const settingsPageJSX = (
+// ─── SETTINGS PAGE ───────────────────────────────────────────────────────────
+function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, memory, setMemory, showToast }) {
+  return (
     <div style={{ padding: "16px", fontFamily: T.font }}>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Theme</div>
@@ -554,8 +366,187 @@ export default function App() {
       </div>
     </div>
   );
+}
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+// ─── APP ─────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [page, setPage] = useState("list");
+  const [items, setItems] = useState(() => load("shopItems", []));
+  const [history, setHistory] = useState(() => load("shopHistory", []));
+  const [settings, setSettings] = useState(() => load("shopSettings", { theme: "default", historyLimit: 3 }));
+  const [memory, setMemory] = useState(() => load("shopMemory", []));
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [confetti, setConfetti] = useState([]);
+  const [showMenu, setShowMenu] = useState(false);
+  const fileRef = useRef();
+  const toastTimer = useRef();
+  const voiceRef = useRef(null);
+  const voiceTimer = useRef(null);
+
+  const T = THEMES[settings.theme] || THEMES.default;
+  const isDark = settings.theme === "space";
+
+  useEffect(() => { persist("shopItems", items); }, [items]);
+  useEffect(() => { persist("shopHistory", history); }, [history]);
+  useEffect(() => { persist("shopSettings", settings); }, [settings]);
+  useEffect(() => { persist("shopMemory", memory); }, [memory]);
+
+  const prevAllDone = useRef(false);
+  useEffect(() => {
+    const total = items.length;
+    const doneCount = items.filter(i => i.done).length;
+    const allDone = total > 0 && doneCount === total;
+    if (allDone && !prevAllDone.current) triggerConfetti();
+    prevAllDone.current = allDone;
+  }, [items]);
+
+  const suggestions = input.length >= 2
+    ? memory.filter(m => m.toLowerCase().includes(input.toLowerCase())).slice(0, 15)
+    : [];
+
+  function showToast(msg) {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2500);
+  }
+
+  function triggerConfetti() {
+    const colors = [T.primary, T.secondary, T.accent, "#f9ca24", "#fd79a8"];
+    const pieces = Array.from({ length: 60 }, (_, i) => ({
+      id: i, color: colors[i % colors.length],
+      left: Math.random() * 100, delay: Math.random() * 0.6,
+      dur: 1.8 + Math.random() * 1.5, round: Math.random() > 0.5,
+    }));
+    setConfetti(pieces);
+    showToast("🎉 All done! Great job!");
+    setTimeout(() => setConfetti([]), 4500);
+  }
+
+  function addItem(name, qty = "") {
+    if (!name.trim()) return;
+    const trimmed = name.trim();
+    setItems(prev => [{ id: Date.now() + Math.random(), name: trimmed, qty, emoji: getEmoji(trimmed), done: false }, ...prev]);
+    setMemory(prev => [trimmed, ...prev.filter(m => m.toLowerCase() !== trimmed.toLowerCase())].slice(0, 100));
+  }
+
+  function addManual() {
+    if (!input.trim()) return;
+    addItem(input);
+    setInput("");
+    showToast("✅ Added!");
+  }
+
+  function toggle(id) {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
+  }
+
+  function deleteItem(id) {
+    setItems(prev => prev.filter(i => i.id !== id));
+  }
+
+  function clearAll() {
+    if (items.length === 0) return;
+    const entry = {
+      id: Date.now(),
+      date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+      items: [...items],
+    };
+    setHistory(prev => [entry, ...prev].slice(0, settings.historyLimit));
+    setItems([]);
+    showToast("Saved to history");
+  }
+
+  function restoreList(entry) {
+    setItems(entry.items.map(i => ({ ...i, done: false })));
+    setPage("list");
+    showToast("✅ List restored!");
+  }
+
+  function shareList() {
+    const todo = items.filter(i => !i.done);
+    const done = items.filter(i => i.done);
+    let text = T.icon + " " + T.title + "\n\n";
+    if (todo.length) text += todo.map(i => i.emoji + " " + i.name + (i.qty ? " – " + i.qty : "")).join("\n");
+    if (done.length) text += "\n\n✅ Done:\n" + done.map(i => "✓ " + i.name).join("\n");
+    navigator.clipboard.writeText(text).then(() => showToast("📋 Copied!")).catch(() => showToast("Couldn't copy"));
+  }
+
+  function startVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { showToast("Voice not supported on this browser"); return; }
+    if (listening) { try { voiceRef.current?.stop(); } catch {} return; }
+    const recognition = new SR();
+    voiceRef.current = recognition;
+    recognition.lang = navigator.language || "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => { setListening(false); clearTimeout(voiceTimer.current); };
+    recognition.onerror = () => { setListening(false); showToast("Voice not supported on this browser"); };
+    recognition.onresult = (event) => {
+      const text = event.results[0][0].transcript.trim();
+      if (/\band\b|,|\n/i.test(text)) {
+        const parts = text.split(/\band\b|,|\n/i).map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => addItem(p));
+        showToast("✨ Added " + parts.length + " items!");
+      } else {
+        setInput(text);
+      }
+    };
+    try {
+      recognition.start();
+      voiceTimer.current = setTimeout(() => { try { recognition.stop(); } catch {} }, 5000);
+    } catch { showToast("Voice not supported on this browser"); }
+  }
+
+  async function handleImage(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = "";
+    setLoading(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const mediaType = file.type || "image/jpeg";
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + import.meta.env.VITE_OPENAI_API_KEY,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o", max_tokens: 1000,
+          messages: [{ role: "user", content: [
+            { type: "image_url", image_url: { url: "data:" + mediaType + ";base64," + base64 } },
+            { type: "text", text: 'Extract any shopping list items from this image. Return ONLY a JSON array, no markdown, no explanation. Each object: {"name":"item name","qty":"quantity if visible else empty string"}. Example: [{"name":"Milk","qty":"2L"},{"name":"Bread","qty":""}]. If nothing found return [].' }
+          ]}]
+        })
+      });
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "[]";
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        showToast("🤔 No items found in image");
+      } else {
+        parsed.forEach(item => addItem(item.name, item.qty || ""));
+        showToast("✨ Added " + parsed.length + " items!");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("❌ Couldn't read image");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const todo = items.filter(i => !i.done);
+  const done = items.filter(i => i.done);
+  const pct = items.length ? Math.round(done.length / items.length * 100) : 0;
+  const pageTitles = { list: T.title, history: "History", settings: "Settings" };
+
   return (
     <div style={{ fontFamily: T.font, background: T.bg, minHeight: "100vh", maxWidth: 430, margin: "0 auto", paddingBottom: 64 }}>
 
@@ -604,9 +595,27 @@ export default function App() {
         )}
       </div>
 
-      {page === "list" && listPageJSX}
-      {page === "history" && historyPageJSX}
-      {page === "settings" && settingsPageJSX}
+      {page === "list" && (
+        <ListPage
+          T={T} isDark={isDark} loading={loading} suggestions={suggestions}
+          input={input} setInput={setInput} addManual={addManual}
+          startVoice={startVoice} listening={listening}
+          showMenu={showMenu} setShowMenu={setShowMenu} fileRef={fileRef}
+          addItem={addItem} showToast={showToast}
+          todo={todo} done={done} toggle={toggle} deleteItem={deleteItem}
+          doneOpen={doneOpen} setDoneOpen={setDoneOpen}
+        />
+      )}
+      {page === "history" && (
+        <HistoryPage T={T} isDark={isDark} history={history} restoreList={restoreList} />
+      )}
+      {page === "settings" && (
+        <SettingsPage
+          T={T} isDark={isDark} settings={settings} setSettings={setSettings}
+          history={history} setHistory={setHistory}
+          memory={memory} setMemory={setMemory} showToast={showToast}
+        />
+      )}
 
       {/* Bottom Navigation */}
       <div style={{
