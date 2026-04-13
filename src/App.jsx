@@ -309,8 +309,7 @@ export default function App() {
   const pct = items.length ? Math.round(done.length / items.length * 100) : 0;
   const pageTitles = { list: T.title, history: "History", settings: "Settings" };
 
-  // ── List Page ───────────────────────────────────────────────────────────────
-  const ListPage = () => (
+  const listPageJSX = (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
       {loading && (
         <div style={{
@@ -454,8 +453,7 @@ export default function App() {
     </div>
   );
 
-  // ── History Page ────────────────────────────────────────────────────────────
-  const HistoryPage = () => (
+  const historyPageJSX = (
     <div style={{ padding: "16px", fontFamily: T.font }}>
       {history.length === 0 ? (
         <div style={{ textAlign: "center", padding: "50px 20px" }}>
@@ -496,8 +494,7 @@ export default function App() {
     </div>
   );
 
-  // ── Settings Page ───────────────────────────────────────────────────────────
-  const SettingsPage = () => (
+  const settingsPageJSX = (
     <div style={{ padding: "16px", fontFamily: T.font }}>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Theme</div>
@@ -607,9 +604,9 @@ export default function App() {
         )}
       </div>
 
-      {page === "list" && <ListPage />}
-      {page === "history" && <HistoryPage />}
-      {page === "settings" && <SettingsPage />}
+      {page === "list" && listPageJSX}
+      {page === "history" && historyPageJSX}
+      {page === "settings" && settingsPageJSX}
 
       {/* Bottom Navigation */}
       <div style={{
