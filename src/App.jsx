@@ -84,7 +84,7 @@ function persist(key, val) {
 }
 
 // ─── ITEM ROW ────────────────────────────────────────────────────────────────
-function ItemRow({ item, onToggle, onDelete, T, isDark, newItem }) {
+function ItemRow({ item, onToggle, onDelete, T, isDark, newItem, removing }) {
   return (
     <div style={{
       background: T.surface, borderRadius: 12, padding: "12px 14px",
@@ -92,7 +92,7 @@ function ItemRow({ item, onToggle, onDelete, T, isDark, newItem }) {
       boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)",
       opacity: item.done ? 0.55 : 1, marginBottom: 8,
       border: isDark ? "1px solid rgba(255,255,255,0.06)" : "none",
-      animation: newItem ? "itemPop 0.4s cubic-bezier(.34,1.56,.64,1) forwards" : "none",
+      animation: removing ? "itemFadeOut 0.35s ease forwards" : newItem ? "itemPop 0.4s cubic-bezier(.34,1.56,.64,1) forwards" : "none",
     }}>
       <button onClick={() => onToggle(item.id)} style={{
         width: 24, height: 24, borderRadius: 4, flexShrink: 0, cursor: "pointer",
@@ -120,7 +120,7 @@ function ItemRow({ item, onToggle, onDelete, T, isDark, newItem }) {
 }
 
 // ─── LIST PAGE ───────────────────────────────────────────────────────────────
-function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen, newItemId }) {
+function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen, newItemId, removingId }) {
   return (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
       {loading && (
@@ -243,7 +243,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
         </div>
       )}
 
-      {todo.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} newItem={item.id === newItemId} />)}
+      {todo.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} newItem={item.id === newItemId} removing={item.id === removingId} />)}
 
       {done.length > 0 && (
         <div style={{ marginTop: 12 }}>
@@ -254,7 +254,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
             <span style={{ fontSize: 13, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", textTransform: "uppercase", letterSpacing: 1 }}>Done · {done.length}</span>
             <span style={{ color: isDark ? "rgba(255,255,255,0.35)" : "#bdbdbd", fontSize: 11, transition: "transform 0.25s", transform: doneOpen ? "rotate(180deg)" : "none" }}>▼</span>
           </button>
-          {doneOpen && done.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} newItem={item.id === newItemId} />)}
+          {doneOpen && done.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} newItem={item.id === newItemId} removing={item.id === removingId} />)}
         </div>
       )}
     </div>
@@ -396,6 +396,7 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const [toast, setToast] = useState(null);
   const [newItemId, setNewItemId] = useState(null);
+  const [removingId, setRemovingId] = useState(null);
   const [doneOpen, setDoneOpen] = useState(false);
   const [confetti, setConfetti] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
@@ -443,6 +444,23 @@ export default function App() {
     setTimeout(() => setConfetti([]), 4500);
   }
 
+  function playPop(type = "add") {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.type = "sine";
+      o.frequency.setValueAtTime(type === "add" ? 600 : 400, ctx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(type === "add" ? 900 : 200, ctx.currentTime + 0.08);
+      g.gain.setValueAtTime(0.3, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      o.start(ctx.currentTime);
+      o.stop(ctx.currentTime + 0.15);
+    } catch(e) {}
+  }
+
   function addItem(name, qty = "") {
     if (!name.trim()) return;
     const trimmed = name.trim();
@@ -451,6 +469,7 @@ export default function App() {
     setMemory(prev => [trimmed, ...prev.filter(m => m.toLowerCase() !== trimmed.toLowerCase())].slice(0, 100));
     setNewItemId(id);
     setTimeout(() => setNewItemId(null), 600);
+    playPop("add");
   }
 
   function addManual() {
@@ -465,16 +484,12 @@ export default function App() {
   }
 
   function deleteItem(id) {
-    setItems(prev => prev.filter(i => i.id !== id));
-    const colors = [T.primary, T.secondary];
-    const pieces = Array.from({ length: 12 }, (_, i) => ({
-      id: "del-" + Date.now() + i, color: colors[i % colors.length],
-      left: Math.random() * 100, top: Math.random() * 25,
-      delay: Math.random() * 0.15, dur: 0.4 + Math.random() * 0.2,
-      round: Math.random() > 0.5, size: 6,
-    }));
-    setConfetti(prev => [...prev, ...pieces]);
-    setTimeout(() => setConfetti(prev => prev.filter(c => !pieces.some(p => p.id === c.id))), 1000);
+    setRemovingId(id);
+    playPop("remove");
+    setTimeout(() => {
+      setItems(prev => prev.filter(i => i.id !== id));
+      setRemovingId(null);
+    }, 350);
   }
 
   function clearAll() {
@@ -634,7 +649,7 @@ export default function App() {
           addItem={addItem} showToast={showToast}
           todo={todo} done={done} toggle={toggle} deleteItem={deleteItem}
           doneOpen={doneOpen} setDoneOpen={setDoneOpen}
-          newItemId={newItemId}
+          newItemId={newItemId} removingId={removingId}
         />
       )}
       {page === "history" && (
@@ -687,6 +702,7 @@ export default function App() {
         @keyframes popIn { from{opacity:0;transform:scale(0.88) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
         @keyframes pulse { 0%,100%{box-shadow:0 0 0 4px rgba(229,57,53,0.3)} 50%{box-shadow:0 0 0 10px rgba(229,57,53,0.12)} }
         @keyframes itemPop { 0%{transform:scale(0.5);opacity:0} 60%{transform:scale(1.08);opacity:1} 80%{transform:scale(0.96)} 100%{transform:scale(1)} }
+        @keyframes itemFadeOut { 0%{transform:translateX(0);opacity:1;max-height:60px} 100%{transform:translateX(60px);opacity:0;max-height:0;padding:0;margin:0} }
       `}</style>
     </div>
   );
