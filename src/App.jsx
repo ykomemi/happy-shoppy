@@ -84,7 +84,7 @@ function persist(key, val) {
 }
 
 // ─── ITEM ROW ────────────────────────────────────────────────────────────────
-function ItemRow({ item, onToggle, onDelete, T, isDark }) {
+function ItemRow({ item, onToggle, onDelete, T, isDark, newItem }) {
   return (
     <div style={{
       background: T.surface, borderRadius: 12, padding: "12px 14px",
@@ -92,6 +92,7 @@ function ItemRow({ item, onToggle, onDelete, T, isDark }) {
       boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)",
       opacity: item.done ? 0.55 : 1, marginBottom: 8,
       border: isDark ? "1px solid rgba(255,255,255,0.06)" : "none",
+      animation: newItem ? "itemPop 0.4s cubic-bezier(.34,1.56,.64,1) forwards" : "none",
     }}>
       <button onClick={() => onToggle(item.id)} style={{
         width: 24, height: 24, borderRadius: 4, flexShrink: 0, cursor: "pointer",
@@ -119,7 +120,7 @@ function ItemRow({ item, onToggle, onDelete, T, isDark }) {
 }
 
 // ─── LIST PAGE ───────────────────────────────────────────────────────────────
-function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen }) {
+function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen, newItemId }) {
   return (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
       {loading && (
@@ -242,7 +243,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
         </div>
       )}
 
-      {todo.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} />)}
+      {todo.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} newItem={item.id === newItemId} />)}
 
       {done.length > 0 && (
         <div style={{ marginTop: 12 }}>
@@ -253,7 +254,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
             <span style={{ fontSize: 13, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", textTransform: "uppercase", letterSpacing: 1 }}>Done · {done.length}</span>
             <span style={{ color: isDark ? "rgba(255,255,255,0.35)" : "#bdbdbd", fontSize: 11, transition: "transform 0.25s", transform: doneOpen ? "rotate(180deg)" : "none" }}>▼</span>
           </button>
-          {doneOpen && done.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} />)}
+          {doneOpen && done.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} newItem={item.id === newItemId} />)}
         </div>
       )}
     </div>
@@ -379,6 +380,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [toast, setToast] = useState(null);
+  const [newItemId, setNewItemId] = useState(null);
   const [doneOpen, setDoneOpen] = useState(false);
   const [confetti, setConfetti] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
@@ -429,8 +431,11 @@ export default function App() {
   function addItem(name, qty = "") {
     if (!name.trim()) return;
     const trimmed = name.trim();
-    setItems(prev => [{ id: Date.now() + Math.random(), name: trimmed, qty, emoji: getEmoji(trimmed), done: false }, ...prev]);
+    const id = Date.now() + Math.random();
+    setItems(prev => [{ id, name: trimmed, qty, emoji: getEmoji(trimmed), done: false }, ...prev]);
     setMemory(prev => [trimmed, ...prev.filter(m => m.toLowerCase() !== trimmed.toLowerCase())].slice(0, 100));
+    setNewItemId(id);
+    setTimeout(() => setNewItemId(null), 600);
   }
 
   function addManual() {
@@ -604,6 +609,7 @@ export default function App() {
           addItem={addItem} showToast={showToast}
           todo={todo} done={done} toggle={toggle} deleteItem={deleteItem}
           doneOpen={doneOpen} setDoneOpen={setDoneOpen}
+          newItemId={newItemId}
         />
       )}
       {page === "history" && (
@@ -655,6 +661,7 @@ export default function App() {
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
         @keyframes popIn { from{opacity:0;transform:scale(0.88) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
         @keyframes pulse { 0%,100%{box-shadow:0 0 0 4px rgba(229,57,53,0.3)} 50%{box-shadow:0 0 0 10px rgba(229,57,53,0.12)} }
+        @keyframes itemPop { 0%{transform:scale(0.5);opacity:0} 60%{transform:scale(1.08);opacity:1} 80%{transform:scale(0.96)} 100%{transform:scale(1)} }
       `}</style>
     </div>
   );
