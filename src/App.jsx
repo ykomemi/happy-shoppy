@@ -83,20 +83,59 @@ function persist(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
+// ─── ITEM ROW (outside App so React never remounts it on re-render) ──────────
+function ItemRow({ item, onToggle, onDelete, T, isDark }) {
+  return (
+    <div style={{
+      background: T.surface, borderRadius: 12, padding: "12px 14px",
+      display: "flex", alignItems: "center", gap: 12,
+      boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)",
+      opacity: item.done ? 0.55 : 1, marginBottom: 8,
+      border: isDark ? "1px solid rgba(255,255,255,0.06)" : "none",
+    }}>
+      <button onClick={() => onToggle(item.id)} style={{
+        width: 24, height: 24, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+        border: item.done ? "none" : "2px solid " + (isDark ? "rgba(255,255,255,0.3)" : "#bdbdbd"),
+        background: item.done ? T.primary : "transparent",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "white", fontSize: 14, fontWeight: 900,
+      }}>{item.done ? "✓" : ""}</button>
+      <span style={{ fontSize: 22, flexShrink: 0 }}>{item.emoji}</span>
+      <span style={{
+        flex: 1, fontSize: 15, fontWeight: 600, fontFamily: T.font,
+        textDecoration: item.done ? "line-through" : "none",
+        color: item.done ? (isDark ? "rgba(255,255,255,0.35)" : "#9e9e9e") : (isDark ? "rgba(255,255,255,0.92)" : "#212121"),
+      }}>{item.name}</span>
+      {item.qty && <span style={{
+        fontSize: 11, fontWeight: 700, color: "white", background: T.chipBg,
+        padding: "2px 8px", borderRadius: 10, flexShrink: 0,
+      }}>{item.qty}</span>}
+      <button onClick={() => onDelete(item.id)} style={{
+        background: "none", border: "none", fontSize: 16, cursor: "pointer",
+        opacity: 0.35, padding: 4, color: isDark ? "white" : "#212121",
+      }}>✕</button>
+    </div>
+  );
+}
+
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState("list");
   const [items, setItems] = useState(() => load("shopItems", []));
   const [history, setHistory] = useState(() => load("shopHistory", []));
   const [settings, setSettings] = useState(() => load("shopSettings", { theme: "default", historyLimit: 3 }));
+  const [memory, setMemory] = useState(() => load("shopMemory", []));
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
   const [toast, setToast] = useState(null);
   const [doneOpen, setDoneOpen] = useState(false);
   const [confetti, setConfetti] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
   const fileRef = useRef();
   const toastTimer = useRef();
+  const voiceRef = useRef(null);
+  const voiceTimer = useRef(null);
 
   const T = THEMES[settings.theme] || THEMES.default;
   const isDark = settings.theme === "space";
@@ -104,6 +143,7 @@ export default function App() {
   useEffect(() => { persist("shopItems", items); }, [items]);
   useEffect(() => { persist("shopHistory", history); }, [history]);
   useEffect(() => { persist("shopSettings", settings); }, [settings]);
+  useEffect(() => { persist("shopMemory", memory); }, [memory]);
 
   // Confetti trigger on all-done
   const prevAllDone = useRef(false);
@@ -115,6 +155,11 @@ export default function App() {
     prevAllDone.current = allDone;
   }, [items]);
 
+  // Autocomplete suggestions
+  const suggestions = input.length >= 2
+    ? memory.filter(m => m.toLowerCase().includes(input.toLowerCase())).slice(0, 15)
+    : [];
+
   function showToast(msg) {
     setToast(msg);
     clearTimeout(toastTimer.current);
@@ -123,7 +168,7 @@ export default function App() {
 
   function triggerConfetti() {
     const colors = [T.primary, T.secondary, T.accent, "#f9ca24", "#fd79a8"];
-    const pieces = Array.from({length: 60}, (_, i) => ({
+    const pieces = Array.from({ length: 60 }, (_, i) => ({
       id: i, color: colors[i % colors.length],
       left: Math.random() * 100, delay: Math.random() * 0.6,
       dur: 1.8 + Math.random() * 1.5, round: Math.random() > 0.5,
@@ -135,7 +180,9 @@ export default function App() {
 
   function addItem(name, qty = "") {
     if (!name.trim()) return;
-    setItems(prev => [{ id: Date.now() + Math.random(), name: name.trim(), qty, emoji: getEmoji(name), done: false }, ...prev]);
+    const trimmed = name.trim();
+    setItems(prev => [{ id: Date.now() + Math.random(), name: trimmed, qty, emoji: getEmoji(trimmed), done: false }, ...prev]);
+    setMemory(prev => [trimmed, ...prev.filter(m => m.toLowerCase() !== trimmed.toLowerCase())].slice(0, 100));
   }
 
   function addManual() {
@@ -180,6 +227,44 @@ export default function App() {
     navigator.clipboard.writeText(text).then(() => showToast("📋 Copied!")).catch(() => showToast("Couldn't copy"));
   }
 
+  function startVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { showToast("Voice not supported on this browser"); return; }
+
+    // Stop if already listening
+    if (listening) {
+      try { voiceRef.current?.stop(); } catch {}
+      return;
+    }
+
+    const recognition = new SR();
+    voiceRef.current = recognition;
+    recognition.lang = navigator.language || "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => { setListening(false); clearTimeout(voiceTimer.current); };
+    recognition.onerror = () => { setListening(false); showToast("Voice not supported on this browser"); };
+    recognition.onresult = (event) => {
+      const text = event.results[0][0].transcript.trim();
+      if (/\band\b|,|\n/i.test(text)) {
+        const parts = text.split(/\band\b|,|\n/i).map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => addItem(p));
+        showToast("✨ Added " + parts.length + " items!");
+      } else {
+        setInput(text);
+      }
+    };
+
+    try {
+      recognition.start();
+      voiceTimer.current = setTimeout(() => { try { recognition.stop(); } catch {} }, 5000);
+    } catch {
+      showToast("Voice not supported on this browser");
+    }
+  }
+
   async function handleImage(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -222,46 +307,11 @@ export default function App() {
   const todo = items.filter(i => !i.done);
   const done = items.filter(i => i.done);
   const pct = items.length ? Math.round(done.length / items.length * 100) : 0;
-
   const pageTitles = { list: T.title, history: "History", settings: "Settings" };
-
-  // ── Item Row ────────────────────────────────────────────────────────────────
-  const ItemRow = ({ item }) => (
-    <div style={{
-      background: T.surface, borderRadius: 12, padding: "12px 14px",
-      display: "flex", alignItems: "center", gap: 12,
-      boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)",
-      opacity: item.done ? 0.55 : 1, marginBottom: 8,
-      border: isDark ? "1px solid rgba(255,255,255,0.06)" : "none",
-    }}>
-      <button onClick={() => toggle(item.id)} style={{
-        width: 24, height: 24, borderRadius: 4, flexShrink: 0, cursor: "pointer",
-        border: item.done ? "none" : "2px solid " + (isDark ? "rgba(255,255,255,0.3)" : "#bdbdbd"),
-        background: item.done ? T.primary : "transparent",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "white", fontSize: 14, fontWeight: 900,
-      }}>{item.done ? "✓" : ""}</button>
-      <span style={{ fontSize: 22, flexShrink: 0 }}>{item.emoji}</span>
-      <span style={{
-        flex: 1, fontSize: 15, fontWeight: 600, fontFamily: T.font,
-        textDecoration: item.done ? "line-through" : "none",
-        color: item.done ? (isDark ? "rgba(255,255,255,0.35)" : "#9e9e9e") : (isDark ? "rgba(255,255,255,0.92)" : "#212121"),
-      }}>{item.name}</span>
-      {item.qty && <span style={{
-        fontSize: 11, fontWeight: 700, color: "white", background: T.chipBg,
-        padding: "2px 8px", borderRadius: 10, flexShrink: 0,
-      }}>{item.qty}</span>}
-      <button onClick={() => deleteItem(item.id)} style={{
-        background: "none", border: "none", fontSize: 16, cursor: "pointer",
-        opacity: 0.35, padding: 4, color: isDark ? "white" : "#212121",
-      }}>✕</button>
-    </div>
-  );
 
   // ── List Page ───────────────────────────────────────────────────────────────
   const ListPage = () => (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
-
       {loading && (
         <div style={{
           background: T.surface, borderRadius: 12, padding: 14, marginBottom: 16,
@@ -275,61 +325,101 @@ export default function App() {
         </div>
       )}
 
-      {/* Search / input row */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", position: "relative" }}>
-        <input
-          className="add-input"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && addManual()}
-          placeholder="Add item..."
-          style={{
-            flex: 1, background: T.surface, border: isDark ? "1px solid rgba(255,255,255,0.15)" : "1.5px solid #e0e0e0",
-            borderRadius: 28, padding: "12px 20px", fontFamily: T.font,
-            fontSize: 15, fontWeight: 500, color: isDark ? "rgba(255,255,255,0.9)" : "#212121",
-            outline: "none",
-          }}
-        />
-        <div style={{ position: "relative", flexShrink: 0 }}>
+      {/* Input row */}
+      <div style={{ marginBottom: suggestions.length > 0 ? 8 : 16 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <input
+            className="add-input"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addManual()}
+            placeholder="Add item..."
+            style={{
+              flex: 1, background: T.surface,
+              border: isDark ? "1px solid rgba(255,255,255,0.15)" : "1.5px solid #e0e0e0",
+              borderRadius: 28, padding: "12px 20px", fontFamily: T.font,
+              fontSize: 15, fontWeight: 500,
+              color: isDark ? "rgba(255,255,255,0.9)" : "#212121", outline: "none",
+            }}
+          />
+
+          {/* Mic button */}
           <button
-            onClick={() => { if (input.trim()) { addManual(); } else { setShowMenu(m => !m); } }}
+            onClick={startVoice}
             style={{
               width: 52, height: 52, borderRadius: "50%", border: "none", cursor: "pointer",
-              background: T.primary, color: "white", fontSize: 28, fontWeight: 300,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center",
+              background: listening ? "#e53935" : T.surface, flexShrink: 0,
+              boxShadow: listening
+                ? "0 0 0 6px rgba(229,57,53,0.25)"
+                : (isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.12)"),
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 22, transition: "background 0.2s, box-shadow 0.2s",
+              animation: listening ? "pulse 1s infinite" : "none",
             }}
-          >+</button>
+            title="Voice input"
+          >🎙️</button>
 
-          {showMenu && (
-            <>
-              <div onClick={() => setShowMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 199 }} />
-              <div style={{
-                position: "absolute", top: 60, right: 0, background: T.surface, borderRadius: 16,
-                boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden", zIndex: 200,
-                minWidth: 200, animation: "popIn 0.18s cubic-bezier(.34,1.56,.64,1)",
-                border: isDark ? "1px solid rgba(255,255,255,0.1)" : "none",
-              }}>
-                {[
-                  { icon: "✏️", label: "Type an item", sub: "Add manually", action: () => { setShowMenu(false); setTimeout(() => document.querySelector(".add-input")?.focus(), 50); } },
-                  { icon: "📸", label: "Scan a photo", sub: "AI reads the list", action: () => { setShowMenu(false); fileRef.current.click(); } },
-                ].map((opt, idx) => (
-                  <div key={idx} onClick={opt.action} style={{
-                    display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", cursor: "pointer",
-                    borderBottom: idx === 0 ? (isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #f0f0f0") : "none",
-                  }}
-                    onMouseEnter={e => e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.06)" : "#f5f5f5"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <span style={{ fontSize: 22, width: 30, textAlign: "center" }}>{opt.icon}</span>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: isDark ? "rgba(255,255,255,0.9)" : "#212121" }}>{opt.label}</div>
-                      <div style={{ fontSize: 12, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", fontWeight: 500 }}>{opt.sub}</div>
+          {/* FAB + */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              onClick={() => { if (input.trim()) { addManual(); } else { setShowMenu(m => !m); } }}
+              style={{
+                width: 52, height: 52, borderRadius: "50%", border: "none", cursor: "pointer",
+                background: T.primary, color: "white", fontSize: 28, fontWeight: 300,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >+</button>
+
+            {showMenu && (
+              <>
+                <div onClick={() => setShowMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 199 }} />
+                <div style={{
+                  position: "absolute", top: 60, right: 0, background: T.surface, borderRadius: 16,
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden", zIndex: 200,
+                  minWidth: 200, animation: "popIn 0.18s cubic-bezier(.34,1.56,.64,1)",
+                  border: isDark ? "1px solid rgba(255,255,255,0.1)" : "none",
+                }}>
+                  {[
+                    { icon: "✏️", label: "Type an item", sub: "Add manually", action: () => { setShowMenu(false); setTimeout(() => document.querySelector(".add-input")?.focus(), 50); } },
+                    { icon: "📸", label: "Scan a photo", sub: "AI reads the list", action: () => { setShowMenu(false); fileRef.current.click(); } },
+                  ].map((opt, idx) => (
+                    <div key={idx} onClick={opt.action} style={{
+                      display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", cursor: "pointer",
+                      borderBottom: idx === 0 ? (isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #f0f0f0") : "none",
+                    }}
+                      onMouseEnter={e => e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.06)" : "#f5f5f5"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <span style={{ fontSize: 22, width: 30, textAlign: "center" }}>{opt.icon}</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: isDark ? "rgba(255,255,255,0.9)" : "#212121" }}>{opt.label}</div>
+                        <div style={{ fontSize: 12, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", fontWeight: 500 }}>{opt.sub}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Autocomplete chips */}
+        {suggestions.length > 0 && (
+          <div style={{
+            display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginTop: 8,
+            scrollbarWidth: "none",
+          }}>
+            {suggestions.map((s, i) => (
+              <button key={i} onClick={() => { addItem(s); setInput(""); showToast("✅ Added!"); }} style={{
+                flexShrink: 0, background: isDark ? "rgba(255,255,255,0.1)" : T.primaryLight,
+                color: isDark ? "rgba(255,255,255,0.85)" : T.primaryDark,
+                border: "none", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                padding: "5px 12px", cursor: "pointer", fontFamily: T.font,
+                whiteSpace: "nowrap",
+              }}>{getEmoji(s)} {s}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* To buy section */}
@@ -347,7 +437,7 @@ export default function App() {
         </div>
       )}
 
-      {todo.map(item => <ItemRow key={item.id} item={item} />)}
+      {todo.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} />)}
 
       {done.length > 0 && (
         <div style={{ marginTop: 12 }}>
@@ -358,7 +448,7 @@ export default function App() {
             <span style={{ fontSize: 13, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", textTransform: "uppercase", letterSpacing: 1 }}>Done · {done.length}</span>
             <span style={{ color: isDark ? "rgba(255,255,255,0.35)" : "#bdbdbd", fontSize: 11, transition: "transform 0.25s", transform: doneOpen ? "rotate(180deg)" : "none" }}>▼</span>
           </button>
-          {doneOpen && done.map(item => <ItemRow key={item.id} item={item} />)}
+          {doneOpen && done.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} />)}
         </div>
       )}
     </div>
@@ -409,7 +499,6 @@ export default function App() {
   // ── Settings Page ───────────────────────────────────────────────────────────
   const SettingsPage = () => (
     <div style={{ padding: "16px", fontFamily: T.font }}>
-      {/* Theme Picker */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Theme</div>
         <div style={{ background: T.surface, borderRadius: 14, overflow: "hidden", boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)", border: isDark ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
@@ -420,10 +509,7 @@ export default function App() {
             }}
               onMouseEnter={e => e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.05)" : "#fafafa"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              <div style={{
-                width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
-                background: theme.headerBg, boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-              }} />
+              <div style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, background: theme.headerBg, boxShadow: "0 2px 6px rgba(0,0,0,0.2)" }} />
               <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: isDark ? "rgba(255,255,255,0.88)" : "#212121" }}>{theme.name}</span>
               {settings.theme === key && <span style={{ color: T.primary, fontSize: 18, fontWeight: 700 }}>✓</span>}
             </div>
@@ -431,7 +517,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* History Limit */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>History limit</div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -446,7 +531,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Data */}
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Data</div>
         <div style={{ background: T.surface, borderRadius: 14, overflow: "hidden", boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)", border: isDark ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
@@ -454,10 +538,20 @@ export default function App() {
             padding: "15px 16px", cursor: history.length > 0 ? "pointer" : "default",
             color: history.length > 0 ? "#e53935" : (isDark ? "rgba(255,255,255,0.25)" : "#bdbdbd"),
             fontSize: 15, fontWeight: 600,
+            borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid #f0f0f0",
           }}
             onMouseEnter={e => { if (history.length > 0) e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.05)" : "#fafafa"; }}
             onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             🗑️ Clear all history
+          </div>
+          <div onClick={() => { if (memory.length === 0) return; setMemory([]); showToast("Memory cleared"); }} style={{
+            padding: "15px 16px", cursor: memory.length > 0 ? "pointer" : "default",
+            color: memory.length > 0 ? "#e53935" : (isDark ? "rgba(255,255,255,0.25)" : "#bdbdbd"),
+            fontSize: 15, fontWeight: 600,
+          }}
+            onMouseEnter={e => { if (memory.length > 0) e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.05)" : "#fafafa"; }}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            🧠 Clear autocomplete memory
           </div>
         </div>
       </div>
@@ -500,13 +594,12 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", height: 56, padding: "0 8px" }}>
           <div style={{ flex: 1, fontSize: 18, fontWeight: 700, paddingLeft: 8, fontFamily: T.font }}>{pageTitles[page]}</div>
           {page === "list" && items.length > 0 && (
-            <div style={{ display: "flex", gap: 0 }}>
+            <div style={{ display: "flex" }}>
               <button onClick={shareList} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>Share</button>
               <button onClick={clearAll} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>Clear</button>
             </div>
           )}
         </div>
-        {/* Linear Progress */}
         {page === "list" && items.length > 0 && (
           <div style={{ height: 3, background: "rgba(255,255,255,0.25)" }}>
             <div style={{ height: "100%", background: "rgba(255,255,255,0.85)", width: pct + "%", transition: "width 0.4s ease" }} />
@@ -514,7 +607,6 @@ export default function App() {
         )}
       </div>
 
-      {/* Page Content */}
       {page === "list" && <ListPage />}
       {page === "history" && <HistoryPage />}
       {page === "settings" && <SettingsPage />}
@@ -522,8 +614,7 @@ export default function App() {
       {/* Bottom Navigation */}
       <div style={{
         position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 430,
-        background: T.surface, zIndex: 100,
+        width: "100%", maxWidth: 430, background: T.surface, zIndex: 100,
         boxShadow: isDark ? "0 -2px 12px rgba(0,0,0,0.5)" : "0 -2px 10px rgba(0,0,0,0.1)",
         display: "flex",
         borderTop: isDark ? "1px solid rgba(255,255,255,0.07)" : "1px solid #eeeeee",
@@ -553,9 +644,11 @@ export default function App() {
         body { margin: 0; }
         .add-input::placeholder { color: ${isDark ? "rgba(255,255,255,0.35)" : "#9e9e9e"}; }
         .add-input:focus { outline: 2px solid ${T.primary}; border-color: transparent !important; }
+        div::-webkit-scrollbar { display: none; }
         @keyframes fall { from{transform:translateY(-20px) rotate(0deg);opacity:1} to{transform:translateY(110vh) rotate(720deg);opacity:0} }
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
         @keyframes popIn { from{opacity:0;transform:scale(0.88) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        @keyframes pulse { 0%,100%{box-shadow:0 0 0 4px rgba(229,57,53,0.3)} 50%{box-shadow:0 0 0 10px rgba(229,57,53,0.12)} }
       `}</style>
     </div>
   );
