@@ -400,6 +400,7 @@ export default function App() {
   const [doneOpen, setDoneOpen] = useState(false);
   const [confetti, setConfetti] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
   const fileRef = useRef();
   const toastTimer = useRef();
   const voiceRef = useRef(null);
@@ -516,7 +517,11 @@ export default function App() {
     let text = T.icon + " " + T.title + "\n\n";
     if (todo.length) text += todo.map(i => i.emoji + " " + i.name + (i.qty ? " – " + i.qty : "")).join("\n");
     if (done.length) text += "\n\n✅ Done:\n" + done.map(i => "✓ " + i.name).join("\n");
-    navigator.clipboard.writeText(text).then(() => showToast("📋 Copied!")).catch(() => showToast("Couldn't copy"));
+    if (navigator.share) {
+      navigator.share({ title: T.title, text }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(text).then(() => showToast("📋 Copied to clipboard!")).catch(() => showToast("Couldn't copy"));
+    }
   }
 
   function startVoice() {
@@ -629,7 +634,7 @@ export default function App() {
           {page === "list" && items.length > 0 && (
             <div style={{ display: "flex" }}>
               <button onClick={shareList} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>Share</button>
-              <button onClick={clearAll} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>Clear</button>
+              <button onClick={() => setShowClearModal(true)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>Clear</button>
             </div>
           )}
         </div>
@@ -661,6 +666,34 @@ export default function App() {
           history={history} setHistory={setHistory}
           memory={memory} setMemory={setMemory} showToast={showToast}
         />
+      )}
+
+      {/* Clear Confirmation Modal */}
+      {showClearModal && (
+        <div onClick={() => setShowClearModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 500 }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            position: "fixed", bottom: 0, left: 0, right: 0, maxWidth: 430, margin: "0 auto",
+            background: T.surface, borderRadius: "24px 24px 0 0", padding: 24,
+            animation: "slideUp 0.25s ease", fontFamily: T.font,
+          }}>
+            <div style={{ textAlign: "center", fontSize: 48, marginBottom: 12 }}>🛒</div>
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 18, color: isDark ? "rgba(255,255,255,0.9)" : "#212121", marginBottom: 8 }}>Save & clear list?</div>
+            <div style={{ textAlign: "center", fontSize: 14, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", marginBottom: 28, lineHeight: 1.5 }}>Your list will be saved to History so you can restore it anytime.</div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowClearModal(false)} style={{
+                flex: 1, padding: "14px 0", borderRadius: 14, cursor: "pointer", fontFamily: T.font,
+                fontSize: 15, fontWeight: 700, background: "none",
+                border: "2px solid " + (isDark ? "rgba(255,255,255,0.2)" : "#e0e0e0"),
+                color: isDark ? "rgba(255,255,255,0.8)" : "#424242",
+              }}>Cancel</button>
+              <button onClick={() => { clearAll(); setShowClearModal(false); }} style={{
+                flex: 1, padding: "14px 0", borderRadius: 14, cursor: "pointer", fontFamily: T.font,
+                fontSize: 15, fontWeight: 700, border: "none",
+                background: T.primary, color: "white",
+              }}>Clear & Save</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Bottom Navigation */}
@@ -700,6 +733,7 @@ export default function App() {
         @keyframes fall { from{transform:translateY(-20px) rotate(0deg);opacity:1} to{transform:translateY(110vh) rotate(720deg);opacity:0} }
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
         @keyframes popIn { from{opacity:0;transform:scale(0.88) translateY(6px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
         @keyframes pulse { 0%,100%{box-shadow:0 0 0 4px rgba(229,57,53,0.3)} 50%{box-shadow:0 0 0 10px rgba(229,57,53,0.12)} }
         @keyframes itemPop { 0%{transform:scale(0.5);opacity:0} 60%{transform:scale(1.08);opacity:1} 80%{transform:scale(0.96)} 100%{transform:scale(1)} }
         @keyframes itemFadeOut { 0%{transform:translateX(0);opacity:1;max-height:60px} 100%{transform:translateX(60px);opacity:0;max-height:0;padding:0;margin:0} }
