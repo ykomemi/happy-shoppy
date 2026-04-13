@@ -263,6 +263,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
 
 // ─── HISTORY PAGE ─────────────────────────────────────────────────────────────
 function HistoryPage({ T, isDark, history, restoreList }) {
+  const [expandedId, setExpandedId] = useState(null);
   return (
     <div style={{ padding: "16px", fontFamily: T.font }}>
       {history.length === 0 ? (
@@ -296,9 +297,23 @@ function HistoryPage({ T, isDark, history, restoreList }) {
               }}>{it.emoji} {it.name}</span>
             ))}
             {entry.items.length > 6 && (
-              <span style={{ fontSize: 12, color: isDark ? "rgba(255,255,255,0.4)" : "#9e9e9e", padding: "3px 4px" }}>+{entry.items.length - 6} more</span>
+              <button onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)} style={{
+                background: "none", border: "none", cursor: "pointer", fontFamily: T.font,
+                fontSize: 12, fontWeight: 700, color: T.primary, padding: "3px 4px",
+              }}>{expandedId === entry.id ? "Hide" : "Show all"}</button>
             )}
           </div>
+          {expandedId === entry.id && (
+            <div style={{ maxHeight: 200, overflowY: "auto", marginTop: 10, paddingTop: 10, borderTop: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid #f0f0f0" }}>
+              {entry.items.map((it, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", fontSize: 14, color: isDark ? "rgba(255,255,255,0.8)" : "#424242", fontFamily: T.font }}>
+                  <span>{it.emoji}</span>
+                  <span style={{ flex: 1, fontWeight: 600 }}>{it.name}</span>
+                  {it.qty && <span style={{ fontSize: 11, fontWeight: 700, color: "white", background: T.chipBg, padding: "1px 7px", borderRadius: 10 }}>{it.qty}</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -451,6 +466,15 @@ export default function App() {
 
   function deleteItem(id) {
     setItems(prev => prev.filter(i => i.id !== id));
+    const colors = [T.primary, T.secondary];
+    const pieces = Array.from({ length: 12 }, (_, i) => ({
+      id: "del-" + Date.now() + i, color: colors[i % colors.length],
+      left: Math.random() * 100, top: Math.random() * 25,
+      delay: Math.random() * 0.15, dur: 0.4 + Math.random() * 0.2,
+      round: Math.random() > 0.5, size: 6,
+    }));
+    setConfetti(prev => [...prev, ...pieces]);
+    setTimeout(() => setConfetti(prev => prev.filter(c => !pieces.some(p => p.id === c.id))), 1000);
   }
 
   function clearAll() {
@@ -561,8 +585,9 @@ export default function App() {
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999, overflow: "hidden" }}>
         {confetti.map(c => (
           <div key={c.id} style={{
-            position: "absolute", width: 9, height: 9, background: c.color,
-            left: c.left + "vw", borderRadius: c.round ? "50%" : 2,
+            position: "absolute", width: c.size || 9, height: c.size || 9, background: c.color,
+            left: c.left + "vw", top: c.top !== undefined ? c.top + "vh" : undefined,
+            borderRadius: c.round ? "50%" : 2,
             animation: "fall " + c.dur + "s " + c.delay + "s linear forwards",
           }} />
         ))}
