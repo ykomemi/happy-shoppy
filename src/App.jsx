@@ -121,10 +121,22 @@ function ItemRow({ item, onToggle, onDelete, T, isDark, newItem, removing }) {
 }
 
 // ─── LIST PAGE ───────────────────────────────────────────────────────────────
-function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen, newItemId, removingId }) {
+function ListPage({ T, isDark, loading, interpreting, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen, newItemId, removingId }) {
   const { t } = useTranslation();
   return (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
+      {interpreting && (
+        <div style={{
+          background: T.surface, borderRadius: 12, padding: 14, marginBottom: 16,
+          boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)",
+          textAlign: "center", border: isDark ? "1px solid rgba(255,255,255,0.06)" : "none",
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.primary }}>🤖 {t('list.aiReading')}</div>
+          <div style={{ display: "flex", gap: 5, justifyContent: "center", marginTop: 8 }}>
+            {[0, 1, 2].map(i => <div key={i} style={{ width: 7, height: 7, background: T.primary, borderRadius: "50%", animation: "bounce 1.2s " + (i * 0.2) + "s infinite" }} />)}
+          </div>
+        </div>
+      )}
       {loading && (
         <div style={{
           background: T.surface, borderRadius: 12, padding: 14, marginBottom: 16,
@@ -159,18 +171,19 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
           {/* Mic button */}
           <button
             onClick={startVoice}
+            disabled={interpreting}
             style={{
-              width: 52, height: 52, borderRadius: "50%", border: "none", cursor: "pointer",
+              width: 52, height: 52, borderRadius: "50%", border: "none", cursor: interpreting ? "default" : "pointer",
               background: listening ? "#e53935" : T.surface, flexShrink: 0,
               boxShadow: listening
                 ? "0 0 0 6px rgba(229,57,53,0.25)"
                 : (isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.12)"),
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 22, transition: "background 0.2s, box-shadow 0.2s",
-              animation: listening ? "pulse 1s infinite" : "none",
+              animation: interpreting ? "spin 1s linear infinite" : (listening ? "pulse 1s infinite" : "none"),
             }}
             title="Voice input"
-          >🎙️</button>
+          >{interpreting ? "⏳" : "🎙️"}</button>
 
           {/* FAB + */}
           <div style={{ position: "relative", flexShrink: 0 }}>
@@ -425,6 +438,7 @@ export default function App() {
   const [confetti, setConfetti] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [interpreting, setInterpreting] = useState(false);
   const fileRef = useRef();
   const toastTimer = useRef();
   const voiceRef = useRef(null);
@@ -553,27 +567,58 @@ export default function App() {
     }
   }
 
+  async function interpretVoice(transcript) {
+    setInterpreting(true);
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + import.meta.env.VITE_OPENAI_API_KEY,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          max_tokens: 500,
+          messages: [{ role: "user", content:
+            "The user said this to add items to a shopping list: \"" + transcript + "\". " +
+            "Extract all shopping items mentioned, even if the text is in mixed languages (English, Spanish, Catalan or any combination). Normalize each item name to the same language as the app UI language: " + i18n.language + ". " +
+            "Return ONLY a JSON array. Each object: {\"name\":\"item name\",\"qty\":\"quantity or empty\"}. " +
+            "Example: [{\"name\":\"Milk\",\"qty\":\"2L\"}]. If nothing found return []."
+          }],
+        }),
+      });
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || "[]";
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsed.forEach(item => addItem(item.name, item.qty || ""));
+        showToast("✨ " + t('list.addedItems', { count: parsed.length }));
+      } else {
+        showToast(t('list.noItemsFound'));
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("❌ " + t('list.couldntRead'));
+    } finally {
+      setInterpreting(false);
+    }
+  }
+
   function startVoice() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { showToast(t('list.voiceNotSupported')); return; }
     if (listening) { try { voiceRef.current?.stop(); } catch {} return; }
     const recognition = new SR();
     voiceRef.current = recognition;
-    recognition.lang = navigator.language || "en-US";
+    recognition.lang = "";
     recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
     recognition.onstart = () => setListening(true);
     recognition.onend = () => { setListening(false); clearTimeout(voiceTimer.current); };
     recognition.onerror = () => { setListening(false); showToast(t('list.voiceNotSupported')); };
     recognition.onresult = (event) => {
-      const text = event.results[0][0].transcript.trim();
-      if (/\band\b|,|\n/i.test(text)) {
-        const parts = text.split(/\band\b|,|\n/i).map(s => s.trim()).filter(Boolean);
-        parts.forEach(p => addItem(p));
-        showToast("✨ " + t('list.addedItems', { count: parts.length }));
-      } else {
-        setInput(text);
-      }
+      const transcript = event.results[0][0].transcript.trim();
+      interpretVoice(transcript);
     };
     try {
       recognition.start();
@@ -676,7 +721,7 @@ export default function App() {
 
       {page === "list" && (
         <ListPage
-          T={T} isDark={isDark} loading={loading} suggestions={suggestions}
+          T={T} isDark={isDark} loading={loading} interpreting={interpreting} suggestions={suggestions}
           input={input} setInput={setInput} addManual={addManual}
           startVoice={startVoice} listening={listening}
           showMenu={showMenu} setShowMenu={setShowMenu} fileRef={fileRef}
@@ -766,6 +811,7 @@ export default function App() {
         @keyframes pulse { 0%,100%{box-shadow:0 0 0 4px rgba(229,57,53,0.3)} 50%{box-shadow:0 0 0 10px rgba(229,57,53,0.12)} }
         @keyframes itemPop { 0%{transform:scale(0.5);opacity:0} 60%{transform:scale(1.08);opacity:1} 80%{transform:scale(0.96)} 100%{transform:scale(1)} }
         @keyframes itemFadeOut { 0%{transform:translateX(0);opacity:1;max-height:60px} 100%{transform:translateX(60px);opacity:0;max-height:0;padding:0;margin:0} }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
       `}</style>
     </div>
   );
