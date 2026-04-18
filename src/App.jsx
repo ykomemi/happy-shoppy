@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 // ─── THEMES ──────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -121,6 +122,7 @@ function ItemRow({ item, onToggle, onDelete, T, isDark, newItem, removing }) {
 
 // ─── LIST PAGE ───────────────────────────────────────────────────────────────
 function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen, newItemId, removingId }) {
+  const { t } = useTranslation();
   return (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
       {loading && (
@@ -129,7 +131,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
           boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)",
           textAlign: "center", border: isDark ? "1px solid rgba(255,255,255,0.06)" : "none",
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.primary }}>🤖 AI is reading your list...</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.primary }}>🤖 {t('list.aiReading')}</div>
           <div style={{ display: "flex", gap: 5, justifyContent: "center", marginTop: 8 }}>
             {[0, 1, 2].map(i => <div key={i} style={{ width: 7, height: 7, background: T.primary, borderRadius: "50%", animation: "bounce 1.2s " + (i * 0.2) + "s infinite" }} />)}
           </div>
@@ -144,7 +146,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addManual()}
-            placeholder="Add item..."
+            placeholder={t('list.addPlaceholder')}
             style={{
               flex: 1, background: T.surface,
               border: isDark ? "1px solid rgba(255,255,255,0.15)" : "1.5px solid #e0e0e0",
@@ -192,8 +194,8 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
                   border: isDark ? "1px solid rgba(255,255,255,0.1)" : "none",
                 }}>
                   {[
-                    { icon: "✏️", label: "Type an item", sub: "Add manually", action: () => { setShowMenu(false); setTimeout(() => document.querySelector(".add-input")?.focus(), 50); } },
-                    { icon: "📸", label: "Scan a photo", sub: "AI reads the list", action: () => { setShowMenu(false); fileRef.current.click(); } },
+                    { icon: "✏️", label: t('list.typeItem'), sub: t('list.typeItemSub'), action: () => { setShowMenu(false); setTimeout(() => document.querySelector(".add-input")?.focus(), 50); } },
+                    { icon: "📸", label: t('list.scanPhoto'), sub: t('list.scanPhotoSub'), action: () => { setShowMenu(false); fileRef.current.click(); } },
                   ].map((opt, idx) => (
                     <div key={idx} onClick={opt.action} style={{
                       display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", cursor: "pointer",
@@ -218,7 +220,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
         {suggestions.length > 0 && (
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginTop: 8, scrollbarWidth: "none" }}>
             {suggestions.map((s, i) => (
-              <button key={i} onClick={() => { addItem(s); setInput(""); showToast("✅ Added!"); }} style={{
+              <button key={i} onClick={() => { addItem(s); setInput(""); showToast("✅ " + t('list.added')); }} style={{
                 flexShrink: 0, background: isDark ? "rgba(255,255,255,0.1)" : T.primaryLight,
                 color: isDark ? "rgba(255,255,255,0.85)" : T.primaryDark,
                 border: "none", borderRadius: 20, fontSize: 12, fontWeight: 600,
@@ -231,15 +233,15 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
 
       {(todo.length > 0 || done.length > 0) && (
         <div style={{ fontSize: 12, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, marginBottom: 8, textTransform: "uppercase" }}>
-          To buy · {todo.length}
+          {t('list.toBuy')} · {todo.length}
         </div>
       )}
 
       {todo.length === 0 && done.length === 0 && (
         <div style={{ textAlign: "center", padding: "50px 20px" }}>
           <div style={{ fontSize: 52, marginBottom: 12 }}>🧺</div>
-          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6, color: isDark ? "rgba(255,255,255,0.7)" : "#424242" }}>List is empty!</div>
-          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.4)" : "#9e9e9e", fontWeight: 500 }}>Tap + to add items or scan a photo</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6, color: isDark ? "rgba(255,255,255,0.7)" : "#424242" }}>{t('list.empty')}</div>
+          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.4)" : "#9e9e9e", fontWeight: 500 }}>{t('list.emptySub')}</div>
         </div>
       )}
 
@@ -251,7 +253,7 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
             background: "none", border: "none", display: "flex", alignItems: "center",
             gap: 6, cursor: "pointer", marginBottom: 8, padding: 0, fontFamily: T.font,
           }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", textTransform: "uppercase", letterSpacing: 1 }}>Done · {done.length}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", textTransform: "uppercase", letterSpacing: 1 }}>{t('list.done')} · {done.length}</span>
             <span style={{ color: isDark ? "rgba(255,255,255,0.35)" : "#bdbdbd", fontSize: 11, transition: "transform 0.25s", transform: doneOpen ? "rotate(180deg)" : "none" }}>▼</span>
           </button>
           {doneOpen && done.map(item => <ItemRow key={item.id} item={item} onToggle={toggle} onDelete={deleteItem} T={T} isDark={isDark} newItem={item.id === newItemId} removing={item.id === removingId} />)}
@@ -263,14 +265,15 @@ function ListPage({ T, isDark, loading, suggestions, input, setInput, addManual,
 
 // ─── HISTORY PAGE ─────────────────────────────────────────────────────────────
 function HistoryPage({ T, isDark, history, restoreList }) {
+  const { t } = useTranslation();
   const [expandedId, setExpandedId] = useState(null);
   return (
     <div style={{ padding: "16px", fontFamily: T.font }}>
       {history.length === 0 ? (
         <div style={{ textAlign: "center", padding: "50px 20px" }}>
           <div style={{ fontSize: 52, marginBottom: 12 }}>📋</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.6)" : "#616161" }}>No history yet</div>
-          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.35)" : "#9e9e9e", marginTop: 6 }}>Clear a list to save it here</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.6)" : "#616161" }}>{t('history.empty')}</div>
+          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.35)" : "#9e9e9e", marginTop: 6 }}>{t('history.emptySub')}</div>
         </div>
       ) : history.map(entry => (
         <div key={entry.id} style={{
@@ -281,12 +284,12 @@ function HistoryPage({ T, isDark, history, restoreList }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, color: isDark ? "rgba(255,255,255,0.9)" : "#212121" }}>{entry.date}</div>
-              <div style={{ fontSize: 12, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", marginTop: 2 }}>{entry.items.length} items</div>
+              <div style={{ fontSize: 12, color: isDark ? "rgba(255,255,255,0.45)" : "#9e9e9e", marginTop: 2 }}>{t('history.items', { count: entry.items.length })}</div>
             </div>
             <button onClick={() => restoreList(entry)} style={{
               background: T.primary, color: "white", border: "none", borderRadius: 20,
               padding: "7px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: T.font,
-            }}>Restore</button>
+            }}>{t('history.restore')}</button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {entry.items.slice(0, 6).map((it, i) => (
@@ -300,7 +303,7 @@ function HistoryPage({ T, isDark, history, restoreList }) {
               <button onClick={() => setExpandedId(expandedId === entry.id ? null : entry.id)} style={{
                 background: "none", border: "none", cursor: "pointer", fontFamily: T.font,
                 fontSize: 12, fontWeight: 700, color: T.primary, padding: "3px 4px",
-              }}>{expandedId === entry.id ? "Hide" : "Show all"}</button>
+              }}>{expandedId === entry.id ? t('history.hide') : t('history.showAll')}</button>
             )}
           </div>
           {expandedId === entry.id && (
@@ -322,10 +325,16 @@ function HistoryPage({ T, isDark, history, restoreList }) {
 
 // ─── SETTINGS PAGE ───────────────────────────────────────────────────────────
 function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, memory, setMemory, showToast }) {
+  const { t } = useTranslation();
+  const languages = [
+    { code: "en", label: "English" },
+    { code: "es", label: "Español" },
+    { code: "ca", label: "Català" },
+  ];
   return (
     <div style={{ padding: "16px", fontFamily: T.font }}>
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Theme</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>{t('settings.theme')}</div>
         <div style={{ background: T.surface, borderRadius: 14, overflow: "hidden", boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)", border: isDark ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
           {Object.entries(THEMES).map(([key, theme], idx, arr) => (
             <div key={key} onClick={() => setSettings(s => ({ ...s, theme: key }))} style={{
@@ -343,7 +352,7 @@ function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, m
       </div>
 
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>History limit</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>{t('settings.historyLimit')}</div>
         <div style={{ display: "flex", gap: 8 }}>
           {[2, 3, 5, 10].map(n => (
             <button key={n} onClick={() => setSettings(s => ({ ...s, historyLimit: n }))} style={{
@@ -356,10 +365,24 @@ function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, m
         </div>
       </div>
 
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>{t('settings.language')}</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {languages.map(lang => (
+            <button key={lang.code} onClick={() => setSettings(s => ({ ...s, language: lang.code }))} style={{
+              flex: 1, padding: "10px 0", borderRadius: 10, border: "none", cursor: "pointer",
+              fontFamily: T.font, fontSize: 14, fontWeight: 700,
+              background: settings.language === lang.code ? T.primary : (isDark ? "rgba(255,255,255,0.1)" : T.primaryLight),
+              color: settings.language === lang.code ? "white" : (isDark ? "rgba(255,255,255,0.7)" : T.primaryDark),
+            }}>{lang.label}</button>
+          ))}
+        </div>
+      </div>
+
       <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Data</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>{t('settings.data')}</div>
         <div style={{ background: T.surface, borderRadius: 14, overflow: "hidden", boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)", border: isDark ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
-          <div onClick={() => { if (history.length === 0) return; setHistory([]); showToast("History cleared"); }} style={{
+          <div onClick={() => { if (history.length === 0) return; setHistory([]); showToast(t('settings.historyCleared')); }} style={{
             padding: "15px 16px", cursor: history.length > 0 ? "pointer" : "default",
             color: history.length > 0 ? "#e53935" : (isDark ? "rgba(255,255,255,0.25)" : "#bdbdbd"),
             fontSize: 15, fontWeight: 600,
@@ -367,7 +390,7 @@ function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, m
           }}
             onMouseEnter={e => { if (history.length > 0) e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.05)" : "#fafafa"; }}
             onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            🗑️ Clear all history
+            🗑️ {t('settings.clearHistory')}
           </div>
           <div onClick={() => { if (memory.length === 0) return; setMemory([]); showToast("Memory cleared"); }} style={{
             padding: "15px 16px", cursor: memory.length > 0 ? "pointer" : "default",
@@ -386,10 +409,11 @@ function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, m
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App() {
+  const { t, i18n } = useTranslation();
   const [page, setPage] = useState("list");
   const [items, setItems] = useState(() => load("shopItems", []));
   const [history, setHistory] = useState(() => load("shopHistory", []));
-  const [settings, setSettings] = useState(() => load("shopSettings", { theme: "default", historyLimit: 3 }));
+  const [settings, setSettings] = useState(() => load("shopSettings", { theme: "default", historyLimit: 3, language: "en" }));
   const [memory, setMemory] = useState(() => load("shopMemory", []));
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -413,6 +437,10 @@ export default function App() {
   useEffect(() => { persist("shopHistory", history); }, [history]);
   useEffect(() => { persist("shopSettings", settings); }, [settings]);
   useEffect(() => { persist("shopMemory", memory); }, [memory]);
+
+  useEffect(() => {
+    if (settings.language) i18n.changeLanguage(settings.language);
+  }, [settings.language]);
 
   const prevAllDone = useRef(false);
   useEffect(() => {
@@ -441,7 +469,7 @@ export default function App() {
       dur: 1.8 + Math.random() * 1.5, round: Math.random() > 0.5,
     }));
     setConfetti(pieces);
-    showToast("🎉 All done! Great job!");
+    showToast(t('completion'));
     setTimeout(() => setConfetti([]), 4500);
   }
 
@@ -477,7 +505,7 @@ export default function App() {
     if (!input.trim()) return;
     addItem(input);
     setInput("");
-    showToast("✅ Added!");
+    showToast("✅ " + t('list.added'));
   }
 
   function toggle(id) {
@@ -502,31 +530,32 @@ export default function App() {
     };
     setHistory(prev => [entry, ...prev].slice(0, settings.historyLimit));
     setItems([]);
-    showToast("Saved to history");
+    showToast(t('clear.savedToHistory'));
   }
 
   function restoreList(entry) {
     setItems(entry.items.map(i => ({ ...i, done: false })));
     setPage("list");
-    showToast("✅ List restored!");
+    showToast("✅ " + t('history.restored'));
   }
 
   function shareList() {
     const todo = items.filter(i => !i.done);
     const done = items.filter(i => i.done);
-    let text = T.icon + " " + T.title + "\n\n";
+    const title = t('themes.' + settings.theme);
+    let text = T.icon + " " + title + "\n\n";
     if (todo.length) text += todo.map(i => i.emoji + " " + i.name + (i.qty ? " – " + i.qty : "")).join("\n");
     if (done.length) text += "\n\n✅ Done:\n" + done.map(i => "✓ " + i.name).join("\n");
     if (navigator.share) {
-      navigator.share({ title: T.title, text }).catch(() => {});
+      navigator.share({ title, text }).catch(() => {});
     } else {
-      navigator.clipboard.writeText(text).then(() => showToast("📋 Copied to clipboard!")).catch(() => showToast("Couldn't copy"));
+      navigator.clipboard.writeText(text).then(() => showToast("📋 " + t('list.copied'))).catch(() => showToast(t('list.couldntCopy')));
     }
   }
 
   function startVoice() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { showToast("Voice not supported on this browser"); return; }
+    if (!SR) { showToast(t('list.voiceNotSupported')); return; }
     if (listening) { try { voiceRef.current?.stop(); } catch {} return; }
     const recognition = new SR();
     voiceRef.current = recognition;
@@ -535,13 +564,13 @@ export default function App() {
     recognition.maxAlternatives = 1;
     recognition.onstart = () => setListening(true);
     recognition.onend = () => { setListening(false); clearTimeout(voiceTimer.current); };
-    recognition.onerror = () => { setListening(false); showToast("Voice not supported on this browser"); };
+    recognition.onerror = () => { setListening(false); showToast(t('list.voiceNotSupported')); };
     recognition.onresult = (event) => {
       const text = event.results[0][0].transcript.trim();
       if (/\band\b|,|\n/i.test(text)) {
         const parts = text.split(/\band\b|,|\n/i).map(s => s.trim()).filter(Boolean);
         parts.forEach(p => addItem(p));
-        showToast("✨ Added " + parts.length + " items!");
+        showToast("✨ " + t('list.addedItems', { count: parts.length }));
       } else {
         setInput(text);
       }
@@ -549,7 +578,7 @@ export default function App() {
     try {
       recognition.start();
       voiceTimer.current = setTimeout(() => { try { recognition.stop(); } catch {} }, 5000);
-    } catch { showToast("Voice not supported on this browser"); }
+    } catch { showToast(t('list.voiceNotSupported')); }
   }
 
   async function handleImage(e) {
@@ -578,14 +607,14 @@ export default function App() {
       const text = data.choices?.[0]?.message?.content || "[]";
       const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
       if (!Array.isArray(parsed) || parsed.length === 0) {
-        showToast("🤔 No items found in image");
+        showToast("🤔 " + t('list.noItemsFound'));
       } else {
         parsed.forEach(item => addItem(item.name, item.qty || ""));
-        showToast("✨ Added " + parsed.length + " items!");
+        showToast("✨ " + t('list.addedItems', { count: parsed.length }));
       }
     } catch (err) {
       console.error(err);
-      showToast("❌ Couldn't read image");
+      showToast("❌ " + t('list.couldntRead'));
     } finally {
       setLoading(false);
     }
@@ -594,7 +623,7 @@ export default function App() {
   const todo = items.filter(i => !i.done);
   const done = items.filter(i => i.done);
   const pct = items.length ? Math.round(done.length / items.length * 100) : 0;
-  const pageTitles = { list: T.title, history: "History", settings: "Settings" };
+  const pageTitles = { list: t('themes.' + settings.theme), history: t('history.title'), settings: t('settings.title') };
 
   return (
     <div style={{ fontFamily: T.font, background: T.bg, minHeight: "100vh", maxWidth: 430, margin: "0 auto", paddingBottom: 64 }}>
@@ -633,8 +662,8 @@ export default function App() {
           <div style={{ flex: 1, fontSize: 18, fontWeight: 700, paddingLeft: 8, fontFamily: T.font }}>{pageTitles[page]}</div>
           {page === "list" && items.length > 0 && (
             <div style={{ display: "flex" }}>
-              <button onClick={shareList} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>Share</button>
-              <button onClick={() => setShowClearModal(true)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>Clear</button>
+              <button onClick={shareList} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>{t('list.share')}</button>
+              <button onClick={() => setShowClearModal(true)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>{t('list.clear')}</button>
             </div>
           )}
         </div>
@@ -677,20 +706,20 @@ export default function App() {
             animation: "slideUp 0.25s ease", fontFamily: T.font,
           }}>
             <div style={{ textAlign: "center", fontSize: 48, marginBottom: 12 }}>🛒</div>
-            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 18, color: isDark ? "rgba(255,255,255,0.9)" : "#212121", marginBottom: 8 }}>Save & clear list?</div>
-            <div style={{ textAlign: "center", fontSize: 14, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", marginBottom: 28, lineHeight: 1.5 }}>Your list will be saved to History so you can restore it anytime.</div>
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 18, color: isDark ? "rgba(255,255,255,0.9)" : "#212121", marginBottom: 8 }}>{t('clear.title')}</div>
+            <div style={{ textAlign: "center", fontSize: 14, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", marginBottom: 28, lineHeight: 1.5 }}>{t('clear.subtitle')}</div>
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => setShowClearModal(false)} style={{
                 flex: 1, padding: "14px 0", borderRadius: 14, cursor: "pointer", fontFamily: T.font,
                 fontSize: 15, fontWeight: 700, background: "none",
                 border: "2px solid " + (isDark ? "rgba(255,255,255,0.2)" : "#e0e0e0"),
                 color: isDark ? "rgba(255,255,255,0.8)" : "#424242",
-              }}>Cancel</button>
+              }}>{t('clear.cancel')}</button>
               <button onClick={() => { clearAll(); setShowClearModal(false); }} style={{
                 flex: 1, padding: "14px 0", borderRadius: 14, cursor: "pointer", fontFamily: T.font,
                 fontSize: 15, fontWeight: 700, border: "none",
                 background: T.primary, color: "white",
-              }}>Clear & Save</button>
+              }}>{t('clear.confirm')}</button>
             </div>
           </div>
         </div>
@@ -705,9 +734,9 @@ export default function App() {
         borderTop: isDark ? "1px solid rgba(255,255,255,0.07)" : "1px solid #eeeeee",
       }}>
         {[
-          { id: "list", icon: "🛒", label: "List" },
-          { id: "history", icon: "📋", label: "History" },
-          { id: "settings", icon: "⚙️", label: "Settings" },
+          { id: "list", icon: "🛒", label: t('nav.list') },
+          { id: "history", icon: "📋", label: t('nav.history') },
+          { id: "settings", icon: "⚙️", label: t('nav.settings') },
         ].map(tab => {
           const active = page === tab.id;
           return (
