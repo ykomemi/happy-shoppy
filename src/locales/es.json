@@ -1,0 +1,66 @@
+{
+  "appTitle": "Mi Lista de la Compra",
+  "themes": {
+    "default": "Clásico",
+    "princess": "Mi Lista Real",
+    "soccer": "Día de Partido",
+    "nature": "Fresco y Natural",
+    "space": "Suministros Espaciales"
+  },
+  "list": {
+    "empty": "Tu lista está vacía",
+    "emptySub": "Toca + para añadir artículos o escanear una foto",
+    "toBuy": "Por comprar",
+    "done": "Hecho",
+    "addPlaceholder": "Añadir un artículo...",
+    "typeItem": "Escribe un artículo",
+    "typeItemSub": "Añadir manualmente",
+    "scanPhoto": "Escanear foto",
+    "scanPhotoSub": "La IA lee la lista",
+    "aiReading": "La IA está leyendo tu lista...",
+    "noItemsFound": "No se encontraron artículos",
+    "addedItems": "¡{{count}} artículos añadidos!",
+    "couldntRead": "No se pudo leer la imagen",
+    "added": "¡Añadido!",
+    "copied": "¡Copiado al portapapeles!",
+    "couldntCopy": "No se pudo copiar",
+    "voiceNotSupported": "Voz no compatible con este navegador",
+    "share": "Compartir",
+    "clear": "Limpiar"
+  },
+  "clear": {
+    "title": "¿Guardar y limpiar lista?",
+    "subtitle": "Tu lista se guardará en el Historial para que puedas restaurarla cuando quieras.",
+    "cancel": "Cancelar",
+    "confirm": "Limpiar y Guardar",
+    "savedToHistory": "Guardado en historial"
+  },
+  "history": {
+    "title": "Historial",
+    "empty": "Sin historial aún",
+    "emptySub": "Las listas se guardan cuando las limpias",
+    "items": "{{count}} artículos",
+    "more": "+{{count}} más",
+    "restore": "Restaurar",
+    "restored": "¡Lista restaurada!",
+    "showAll": "Ver todo",
+    "hide": "Ocultar"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "theme": "Tema",
+    "historyLimit": "Listas a recordar",
+    "historyLimitSub": "Cuántas listas pasadas guardar en el historial",
+    "data": "Datos",
+    "clearHistory": "Borrar todo el historial",
+    "clearHistoryConfirm": "¿Borrar todo el historial?",
+    "historyCleared": "Historial borrado",
+    "language": "Idioma"
+  },
+  "nav": {
+    "list": "Lista",
+    "history": "Historial",
+    "settings": "Ajustes"
+  },
+  "completion": "🎉 ¡Todo hecho! ¡Bien hecho!"
+}

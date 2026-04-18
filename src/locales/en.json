@@ -1,0 +1,66 @@
+{
+  "appTitle": "My Shopping List",
+  "themes": {
+    "default": "Classic",
+    "princess": "My Royal List",
+    "soccer": "Match Day Shop",
+    "nature": "Fresh & Natural",
+    "space": "Space Supplies"
+  },
+  "list": {
+    "empty": "Your list is empty",
+    "emptySub": "Tap + to add items or scan a photo",
+    "toBuy": "To buy",
+    "done": "Done",
+    "addPlaceholder": "Add an item...",
+    "typeItem": "Type an item",
+    "typeItemSub": "Add manually",
+    "scanPhoto": "Scan a photo",
+    "scanPhotoSub": "AI reads the list",
+    "aiReading": "AI is reading your list...",
+    "noItemsFound": "No items found",
+    "addedItems": "Added {{count}} items!",
+    "couldntRead": "Couldn't read image",
+    "added": "Added!",
+    "copied": "Copied to clipboard!",
+    "couldntCopy": "Couldn't copy",
+    "voiceNotSupported": "Voice not supported on this browser",
+    "share": "Share",
+    "clear": "Clear"
+  },
+  "clear": {
+    "title": "Save & clear list?",
+    "subtitle": "Your list will be saved to History so you can restore it anytime.",
+    "cancel": "Cancel",
+    "confirm": "Clear & Save",
+    "savedToHistory": "Saved to history"
+  },
+  "history": {
+    "title": "History",
+    "empty": "No history yet",
+    "emptySub": "Lists are saved when you clear them",
+    "items": "{{count}} items",
+    "more": "+{{count}} more",
+    "restore": "Restore",
+    "restored": "List restored!",
+    "showAll": "Show all",
+    "hide": "Hide"
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": "Theme",
+    "historyLimit": "Lists to remember",
+    "historyLimitSub": "How many past lists to save in history",
+    "data": "Data",
+    "clearHistory": "Clear all history",
+    "clearHistoryConfirm": "Clear all history?",
+    "historyCleared": "History cleared",
+    "language": "Language"
+  },
+  "nav": {
+    "list": "List",
+    "history": "History",
+    "settings": "Settings"
+  },
+  "completion": "🎉 All done! Great job!"
+}

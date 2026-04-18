@@ -1,0 +1,66 @@
+{
+  "appTitle": "La Meva Llista de la Compra",
+  "themes": {
+    "default": "Clàssic",
+    "princess": "La Meva Llista Reial",
+    "soccer": "Dia de Partit",
+    "nature": "Fresc i Natural",
+    "space": "Subministraments Espacials"
+  },
+  "list": {
+    "empty": "La teva llista és buida",
+    "emptySub": "Toca + per afegir articles o escanejar una foto",
+    "toBuy": "Per comprar",
+    "done": "Fet",
+    "addPlaceholder": "Afegir un article...",
+    "typeItem": "Escriu un article",
+    "typeItemSub": "Afegir manualment",
+    "scanPhoto": "Escanejar foto",
+    "scanPhotoSub": "La IA llegeix la llista",
+    "aiReading": "La IA està llegint la teva llista...",
+    "noItemsFound": "No s'han trobat articles",
+    "addedItems": "{{count}} articles afegits!",
+    "couldntRead": "No s'ha pogut llegir la imatge",
+    "added": "Afegit!",
+    "copied": "Copiat al porta-retalls!",
+    "couldntCopy": "No s'ha pogut copiar",
+    "voiceNotSupported": "Veu no compatible amb aquest navegador",
+    "share": "Compartir",
+    "clear": "Netejar"
+  },
+  "clear": {
+    "title": "Desar i netejar la llista?",
+    "subtitle": "La teva llista es desarà a l'Historial perquè puguis restaurar-la quan vulguis.",
+    "cancel": "Cancel·lar",
+    "confirm": "Netejar i Desar",
+    "savedToHistory": "Desat a l'historial"
+  },
+  "history": {
+    "title": "Historial",
+    "empty": "Sense historial encara",
+    "emptySub": "Les llistes es desen quan les neteges",
+    "items": "{{count}} articles",
+    "more": "+{{count}} més",
+    "restore": "Restaurar",
+    "restored": "Llista restaurada!",
+    "showAll": "Veure tot",
+    "hide": "Amagar"
+  },
+  "settings": {
+    "title": "Configuració",
+    "theme": "Tema",
+    "historyLimit": "Llistes a recordar",
+    "historyLimitSub": "Quantes llistes passades desar a l'historial",
+    "data": "Dades",
+    "clearHistory": "Esborrar tot l'historial",
+    "clearHistoryConfirm": "Esborrar tot l'historial?",
+    "historyCleared": "Historial esborrat",
+    "language": "Idioma"
+  },
+  "nav": {
+    "list": "Llista",
+    "history": "Historial",
+    "settings": "Configuració"
+  },
+  "completion": "🎉 Tot fet! Molt bé!"
+}
