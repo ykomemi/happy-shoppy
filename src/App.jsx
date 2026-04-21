@@ -670,12 +670,17 @@ export default function App() {
           model: "gpt-4o",
           max_tokens: 500,
           messages: [{ role: "user", content:
-            "You are a shopping list assistant. The user spoke in any language (English, Spanish, Catalan, or a mix of all three). Their exact words were: \"" + transcript + "\"\n\n" +
-            "Extract ALL food items, household products, or anything that could be bought in a supermarket. Be generous in interpretation. If the user said numbers before items treat them as quantities.\n\n" +
-            "Normalize item names to: " + i18n.language + " language.\n\n" +
-            "Return ONLY valid JSON, no explanation, no markdown:\n" +
+            "You are a multilingual shopping list assistant working in Barcelona, Spain. The user just spoke and the speech recognition captured: \"" + transcript + "\"\n\n" +
+            "The user may have spoken in English, Spanish, Catalan, or a natural mix of all three (very common in Barcelona).\n\n" +
+            "Your job:\n" +
+            "- Extract ALL items that could be bought in a supermarket\n" +
+            "- Understand quantities in any language (dos, two, dues, 2)\n" +
+            "- Handle brand names (Cola Cao, Fairy, Mercadona brand, etc)\n" +
+            "- If a word sounds like a product even if misspelled by speech recognition, include it\n\n" +
+            "IMPORTANT: Return item names in the SAME language the user spoke them. Do not translate. If they said 'llet' keep 'llet', if they said 'leche' keep 'leche', if they said 'milk' keep 'milk'. The app will handle display.\n\n" +
+            "Return ONLY valid JSON, no markdown, no explanation:\n" +
             "[{\"name\":\"item name\",\"qty\":\"quantity or empty string\"}]\n\n" +
-            "If genuinely nothing shopping-related was said, return: []"
+            "If nothing shopping-related was detected return: []"
           }],
         }),
       });
@@ -710,8 +715,7 @@ export default function App() {
     if (listening) { try { voiceRef.current?.stop(); } catch {} return; }
     const recognition = new SR();
     voiceRef.current = recognition;
-    const langMap = { ca: "ca-ES", es: "es-ES", en: "en-US" };
-    recognition.lang = langMap[i18n.language] || "es-ES";
+    recognition.lang = "es-ES";
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onstart = () => setListening(true);
