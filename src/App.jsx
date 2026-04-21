@@ -670,16 +670,26 @@ export default function App() {
           model: "gpt-4o",
           max_tokens: 500,
           messages: [{ role: "user", content:
-            "The user said this to add items to a shopping list: \"" + transcript + "\". " +
-            "Extract all shopping items mentioned, even if the text is in mixed languages (English, Spanish, Catalan or any combination). Normalize each item name to the same language as the app UI language: " + i18n.language + ". " +
-            "Return ONLY a JSON array. Each object: {\"name\":\"item name\",\"qty\":\"quantity or empty\"}. " +
-            "Example: [{\"name\":\"Milk\",\"qty\":\"2L\"}]. If nothing found return []."
+            "You are a shopping list assistant. The user spoke in any language (English, Spanish, Catalan, or a mix of all three). Their exact words were: \"" + transcript + "\"\n\n" +
+            "Extract ALL food items, household products, or anything that could be bought in a supermarket. Be generous in interpretation. If the user said numbers before items treat them as quantities.\n\n" +
+            "Normalize item names to: " + i18n.language + " language.\n\n" +
+            "Return ONLY valid JSON, no explanation, no markdown:\n" +
+            "[{\"name\":\"item name\",\"qty\":\"quantity or empty string\"}]\n\n" +
+            "If genuinely nothing shopping-related was said, return: []"
           }],
         }),
       });
       const data = await response.json();
       const text = data.choices?.[0]?.message?.content || "[]";
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      let parsed = [];
+      try {
+        const clean = text.replace(/```json|```/g, "").trim();
+        const match = clean.match(/\[.*\]/s);
+        parsed = JSON.parse(match ? match[0] : clean);
+      } catch(e) {
+        console.error("Parse error:", text);
+        parsed = [];
+      }
       if (Array.isArray(parsed) && parsed.length > 0) {
         parsed.forEach(item => addItem(item.name, item.qty || ""));
         showToast("✨ " + t('list.addedItems', { count: parsed.length }));
@@ -700,7 +710,8 @@ export default function App() {
     if (listening) { try { voiceRef.current?.stop(); } catch {} return; }
     const recognition = new SR();
     voiceRef.current = recognition;
-    recognition.lang = "";
+    const langMap = { ca: "ca-ES", es: "es-ES", en: "en-US" };
+    recognition.lang = langMap[i18n.language] || "es-ES";
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onstart = () => setListening(true);
@@ -708,6 +719,7 @@ export default function App() {
     recognition.onerror = () => { setListening(false); showToast(t('list.voiceNotSupported')); };
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.trim();
+      console.log(transcript);
       interpretVoice(transcript);
     };
     try {
