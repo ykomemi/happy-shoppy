@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useShoppingList } from './useShoppingList';
 
 // ─── THEMES ──────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -427,7 +428,7 @@ function HistoryPage({ T, isDark, history, restoreList }) {
 }
 
 // ─── SETTINGS PAGE ───────────────────────────────────────────────────────────
-function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, memory, setMemory, showToast }) {
+function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, memory, setMemory, showToast, user, logout }) {
   const { t } = useTranslation();
   const languages = [
     { code: "en", label: "English" },
@@ -436,6 +437,19 @@ function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, m
   ];
   return (
     <div style={{ padding: "16px", fontFamily: T.font }}>
+      {user && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Profile</div>
+          <div style={{ background: T.surface, borderRadius: 14, padding: "16px", boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)", border: isDark ? "1px solid rgba(255,255,255,0.07)" : "none", display: "flex", alignItems: "center", gap: 14 }}>
+            <img src={user.user_metadata.avatar_url} style={{ borderRadius: "50%", width: 48, height: 48, flexShrink: 0 }} alt="" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: isDark ? "rgba(255,255,255,0.9)" : "#212121", marginBottom: 2 }}>{user.user_metadata.full_name}</div>
+              <div style={{ fontSize: 12, color: isDark ? "rgba(255,255,255,0.5)" : "#9e9e9e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
+            </div>
+            <button onClick={logout} style={{ background: "none", border: "2px solid " + (isDark ? "rgba(255,255,255,0.3)" : "#e0e0e0"), borderRadius: 20, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", color: isDark ? "rgba(255,255,255,0.7)" : "#424242", fontFamily: T.font, whiteSpace: "nowrap", flexShrink: 0 }}>Sign out</button>
+          </div>
+        </div>
+      )}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>{t('settings.theme')}</div>
         <div style={{ background: T.surface, borderRadius: 14, overflow: "hidden", boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)", border: isDark ? "1px solid rgba(255,255,255,0.07)" : "none" }}>
@@ -514,12 +528,15 @@ function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, m
 export default function App() {
   const { t, i18n } = useTranslation();
   const [page, setPage] = useState("list");
-  const [items, setItems] = useState(() => load("shopItems", []));
-  const [history, setHistory] = useState(() => load("shopHistory", []));
   const [settings, setSettings] = useState(() => load("shopSettings", { theme: "default", historyLimit: 3, language: "en" }));
   const [memory, setMemory] = useState(() => load("shopMemory", []));
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const {
+    user, loading, items, history,
+    addItem: dbAddItem, toggleItem, deleteItem: dbDeleteItem,
+    clearItems, restoreHistory, login, logout
+  } = useShoppingList();
   const [listening, setListening] = useState(false);
   const [toast, setToast] = useState(null);
   const [newItemId, setNewItemId] = useState(null);
@@ -537,8 +554,6 @@ export default function App() {
   const T = THEMES[settings.theme] || THEMES.default;
   const isDark = settings.theme === "space";
 
-  useEffect(() => { persist("shopItems", items); }, [items]);
-  useEffect(() => { persist("shopHistory", history); }, [history]);
   useEffect(() => { persist("shopSettings", settings); }, [settings]);
   useEffect(() => { persist("shopMemory", memory); }, [memory]);
 
@@ -594,14 +609,16 @@ export default function App() {
     } catch(e) {}
   }
 
-  function addItem(name, qty = "") {
+  async function addItem(name, qty = "") {
     if (!name.trim()) return;
     const trimmed = name.trim();
-    const id = Date.now() + Math.random();
-    setItems(prev => [{ id, name: trimmed, qty, emoji: getEmoji(trimmed), done: false }, ...prev]);
+    const emoji = getEmoji(trimmed);
+    const data = await dbAddItem(trimmed, qty, emoji);
     setMemory(prev => [trimmed, ...prev.filter(m => m.toLowerCase() !== trimmed.toLowerCase())].slice(0, 100));
-    setNewItemId(id);
-    setTimeout(() => setNewItemId(null), 600);
+    if (data?.id) {
+      setNewItemId(data.id);
+      setTimeout(() => setNewItemId(null), 600);
+    }
     playPop("add");
   }
 
@@ -613,32 +630,27 @@ export default function App() {
   }
 
   function toggle(id) {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i));
+    const item = items.find(i => i.id === id);
+    if (item) toggleItem(id, item.done);
   }
 
   function deleteItem(id) {
     setRemovingId(id);
     playPop("remove");
     setTimeout(() => {
-      setItems(prev => prev.filter(i => i.id !== id));
+      dbDeleteItem(id);
       setRemovingId(null);
     }, 350);
   }
 
-  function clearAll() {
-    if (items.length === 0) return;
-    const entry = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
-      items: [...items],
-    };
-    setHistory(prev => [entry, ...prev].slice(0, settings.historyLimit));
-    setItems([]);
+  async function clearAll() {
+    await clearItems(settings.historyLimit);
     showToast(t('clear.savedToHistory'));
+    setShowClearModal(false);
   }
 
-  function restoreList(entry) {
-    setItems(entry.items.map(i => ({ ...i, done: false })));
+  async function restoreList(entry) {
+    await restoreHistory(entry);
     setPage("list");
     showToast("✅ " + t('history.restored'));
   }
@@ -736,7 +748,7 @@ export default function App() {
     const file = e.target.files[0];
     if (!file) return;
     e.target.value = "";
-    setLoading(true);
+    setScanning(true);
     try {
       const base64 = await fileToBase64(file);
       const mediaType = file.type || "image/jpeg";
@@ -767,7 +779,7 @@ export default function App() {
       console.error(err);
       showToast("❌ " + t('list.couldntRead'));
     } finally {
-      setLoading(false);
+      setScanning(false);
     }
   }
 
@@ -775,6 +787,27 @@ export default function App() {
   const done = items.filter(i => i.done);
   const pct = items.length ? Math.round(done.length / items.length * 100) : 0;
   const pageTitles = { list: t('themes.' + settings.theme), history: t('history.title'), settings: t('settings.title') };
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: T.bg, fontFamily: T.font }}>
+      <div style={{ fontSize: 48, animation: "pulse 1s infinite" }}>{T.icon}</div>
+      <div style={{ marginTop: 16, color: T.primary, fontWeight: 600, fontSize: 15 }}>Loading...</div>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+    </div>
+  );
+
+  if (!user) return (
+    <div style={{ minHeight: "100vh", background: T.headerBg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: T.font, padding: 24, maxWidth: 430, margin: "0 auto" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');`}</style>
+      <div style={{ fontSize: 72 }}>{T.icon}</div>
+      <h1 style={{ color: "white", fontFamily: "'Fredoka One', cursive", fontSize: 32, margin: "16px 0 8px", textAlign: "center" }}>{T.title}</h1>
+      <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 16, margin: "0 0 40px", textAlign: "center" }}>Family shopping, in sync 🔄</p>
+      <button onClick={login} style={{ background: "white", border: "none", borderRadius: 50, padding: "14px 28px", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }}>
+        <span style={{ fontSize: 18, fontWeight: 900, color: "#4285F4" }}>G</span> Continue with Google
+      </button>
+      <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 32, textAlign: "center" }}>Your list syncs across all family devices instantly</p>
+    </div>
+  );
 
   return (
     <div style={{ fontFamily: T.font, background: T.bg, minHeight: "100vh", maxWidth: 430, margin: "0 auto", paddingBottom: 64 }}>
@@ -827,7 +860,7 @@ export default function App() {
 
       {page === "list" && (
         <ListPage
-          T={T} isDark={isDark} loading={loading} interpreting={interpreting} suggestions={suggestions}
+          T={T} isDark={isDark} loading={scanning} interpreting={interpreting} suggestions={suggestions}
           input={input} setInput={setInput} addManual={addManual}
           startVoice={startVoice} listening={listening}
           showMenu={showMenu} setShowMenu={setShowMenu} fileRef={fileRef}
@@ -843,8 +876,9 @@ export default function App() {
       {page === "settings" && (
         <SettingsPage
           T={T} isDark={isDark} settings={settings} setSettings={setSettings}
-          history={history} setHistory={setHistory}
+          history={history} setHistory={() => {}}
           memory={memory} setMemory={setMemory} showToast={showToast}
+          user={user} logout={logout}
         />
       )}
 
@@ -866,7 +900,7 @@ export default function App() {
                 border: "2px solid " + (isDark ? "rgba(255,255,255,0.2)" : "#e0e0e0"),
                 color: isDark ? "rgba(255,255,255,0.8)" : "#424242",
               }}>{t('clear.cancel')}</button>
-              <button onClick={() => { clearAll(); setShowClearModal(false); }} style={{
+              <button onClick={clearAll} style={{
                 flex: 1, padding: "14px 0", borderRadius: 14, cursor: "pointer", fontFamily: T.font,
                 fontSize: 15, fontWeight: 700, border: "none",
                 background: T.primary, color: "white",
@@ -904,7 +938,7 @@ export default function App() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Nunito:wght@600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Nunito:wght@600;700;800;900&family=Fredoka+One&display=swap');
         * { box-sizing: border-box; }
         body { margin: 0; }
         .add-input::placeholder { color: ${isDark ? "rgba(255,255,255,0.35)" : "#9e9e9e"}; }
