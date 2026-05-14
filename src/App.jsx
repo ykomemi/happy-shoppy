@@ -212,7 +212,7 @@ function ItemRow({ item, onToggle, onDelete, T, isDark, newItem, removing }) {
 }
 
 // ─── LIST PAGE ───────────────────────────────────────────────────────────────
-function ListPage({ T, isDark, loading, interpreting, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen, newItemId, removingId }) {
+function ListPage({ T, isDark, loading, interpreting, suggestions, input, setInput, addManual, startVoice, listening, showMenu, setShowMenu, fileRef, addItem, showToast, todo, done, toggle, deleteItem, doneOpen, setDoneOpen, newItemId, removingId, activeList }) {
   const { t } = useTranslation();
   return (
     <div style={{ padding: "16px 16px 0", fontFamily: T.font }}>
@@ -344,8 +344,12 @@ function ListPage({ T, isDark, loading, interpreting, suggestions, input, setInp
       {todo.length === 0 && done.length === 0 && (
         <div style={{ textAlign: "center", padding: "50px 20px" }}>
           <div style={{ fontSize: 52, marginBottom: 12 }}>🧺</div>
-          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6, color: isDark ? "rgba(255,255,255,0.7)" : "#424242" }}>{t('list.empty')}</div>
-          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.4)" : "#9e9e9e", fontWeight: 500 }}>{t('list.emptySub')}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6, color: isDark ? "rgba(255,255,255,0.7)" : "#424242" }}>
+            {activeList === "my" ? "Your personal list is empty" : "Family list is empty"}
+          </div>
+          <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.4)" : "#9e9e9e", fontWeight: 500 }}>
+            {activeList === "my" ? "Only you can see this list 👤" : "Everyone can add items here 👨‍👩‍👧"}
+          </div>
         </div>
       )}
 
@@ -428,7 +432,7 @@ function HistoryPage({ T, isDark, history, restoreList }) {
 }
 
 // ─── SETTINGS PAGE ───────────────────────────────────────────────────────────
-function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, memory, setMemory, showToast, user, logout }) {
+function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, memory, setMemory, showToast, user, logout, activeList }) {
   const { t } = useTranslation();
   const languages = [
     { code: "en", label: "English" },
@@ -447,6 +451,12 @@ function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, m
               <div style={{ fontSize: 12, color: isDark ? "rgba(255,255,255,0.5)" : "#9e9e9e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
             </div>
             <button onClick={logout} style={{ background: "none", border: "2px solid " + (isDark ? "rgba(255,255,255,0.3)" : "#e0e0e0"), borderRadius: 20, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", color: isDark ? "rgba(255,255,255,0.7)" : "#424242", fontFamily: T.font, whiteSpace: "nowrap", flexShrink: 0 }}>Sign out</button>
+          </div>
+          <div style={{ marginTop: 10, background: T.surface, borderRadius: 12, padding: "12px 16px", boxShadow: isDark ? "0 2px 10px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.08)", border: isDark ? "1px solid rgba(255,255,255,0.07)" : "none", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: activeList === "family" ? "#43a047" : "#9e9e9e", display: "inline-block", flexShrink: 0 }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: isDark ? "rgba(255,255,255,0.75)" : "#424242" }}>
+              {activeList === "family" ? "🔄 Syncing Family List" : "⚫ Local only"}
+            </span>
           </div>
         </div>
       )}
@@ -528,6 +538,7 @@ function SettingsPage({ T, isDark, settings, setSettings, history, setHistory, m
 export default function App() {
   const { t, i18n } = useTranslation();
   const [page, setPage] = useState("list");
+  const [activeList, setActiveList] = useState(() => load("activeList", "family"));
   const [settings, setSettings] = useState(() => load("shopSettings", { theme: "default", historyLimit: 3, language: "en" }));
   const [memory, setMemory] = useState(() => load("shopMemory", []));
   const [input, setInput] = useState("");
@@ -535,8 +546,8 @@ export default function App() {
   const {
     user, loading, items, history,
     addItem: dbAddItem, toggleItem, deleteItem: dbDeleteItem,
-    clearItems, restoreHistory, login, logout
-  } = useShoppingList();
+    clearItems, restoreHistory, addItemToFamily, login, logout
+  } = useShoppingList(activeList);
   const [listening, setListening] = useState(false);
   const [toast, setToast] = useState(null);
   const [newItemId, setNewItemId] = useState(null);
@@ -545,6 +556,7 @@ export default function App() {
   const [confetti, setConfetti] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
   const [interpreting, setInterpreting] = useState(false);
   const fileRef = useRef();
   const toastTimer = useRef();
@@ -653,6 +665,38 @@ export default function App() {
     await restoreHistory(entry);
     setPage("list");
     showToast("✅ " + t('history.restored'));
+  }
+
+  function switchList(list) {
+    setActiveList(list);
+    persist("activeList", list);
+  }
+
+  async function handleMoveToFamily() {
+    const snapshot = [...items];
+    await Promise.all(snapshot.map(item =>
+      addItemToFamily(item.name, item.qty || '', item.emoji || '🛒')
+    ));
+    persist("myListItems", []);
+    setShowMoveModal(false);
+    switchList("family");
+    showToast("Moved to Family List! 🎉");
+  }
+
+  function handleCopyToMyList() {
+    const copy = items.map((item, i) => ({
+      id: `my-${Date.now()}-${i}`,
+      name: item.name,
+      qty: item.qty || '',
+      emoji: item.emoji || '🛒',
+      done: false,
+      added_by: item.added_by || 'Someone',
+      created_at: new Date().toISOString(),
+    }));
+    persist("myListItems", copy);
+    setShowMoveModal(false);
+    switchList("my");
+    showToast("Copied to My List!");
   }
 
   function shareList() {
@@ -787,9 +831,20 @@ export default function App() {
   const done = items.filter(i => i.done);
   const pct = items.length ? Math.round(done.length / items.length * 100) : 0;
   const pageTitles = { list: t('themes.' + settings.theme), history: t('history.title'), settings: t('settings.title') };
+  const showFAB = page === "list" && items.length > 0;
+
+  const toastEl = toast ? (
+    <div style={{
+      position: "fixed", bottom: showFAB ? 128 : 76, left: "50%", transform: "translateX(-50%)",
+      background: "#323232", color: "white", padding: "12px 22px",
+      borderRadius: 8, fontSize: 14, fontWeight: 500, zIndex: 1000,
+      boxShadow: "0 4px 16px rgba(0,0,0,0.3)", whiteSpace: "nowrap", fontFamily: T.font,
+    }}>{toast}</div>
+  ) : null;
 
   if (loading) return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: T.bg, fontFamily: T.font }}>
+      {toastEl}
       <div style={{ fontSize: 48, animation: "pulse 1s infinite" }}>{T.icon}</div>
       <div style={{ marginTop: 16, color: T.primary, fontWeight: 600, fontSize: 15 }}>Loading...</div>
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
@@ -810,7 +865,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily: T.font, background: T.bg, minHeight: "100vh", maxWidth: 430, margin: "0 auto", paddingBottom: 64 }}>
+    <div style={{ fontFamily: T.font, background: T.bg, minHeight: "100vh", maxWidth: 430, margin: "0 auto", paddingBottom: showFAB ? 118 : 64 }}>
 
       <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImage} />
 
@@ -827,14 +882,7 @@ export default function App() {
       </div>
 
       {/* Snackbar Toast */}
-      {toast && (
-        <div style={{
-          position: "fixed", bottom: 76, left: "50%", transform: "translateX(-50%)",
-          background: "#323232", color: "white", padding: "12px 22px",
-          borderRadius: 8, fontSize: 14, fontWeight: 500, zIndex: 1000,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.3)", whiteSpace: "nowrap", fontFamily: T.font,
-        }}>{toast}</div>
-      )}
+      {toastEl}
 
       {/* Top App Bar */}
       <div style={{
@@ -843,7 +891,10 @@ export default function App() {
         boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
       }}>
         <div style={{ display: "flex", alignItems: "center", height: 56, padding: "0 8px" }}>
-          <div style={{ flex: 1, fontSize: 18, fontWeight: 700, paddingLeft: 8, fontFamily: T.font }}>{pageTitles[page]}</div>
+          <div style={{ flex: 1, fontSize: 18, fontWeight: 700, paddingLeft: 8, fontFamily: T.font, display: "flex", alignItems: "center", gap: 6 }}>
+            {pageTitles[page]}
+            {page === "list" && activeList === "family" && <span style={{ fontSize: 14, opacity: 0.85 }}>🔄</span>}
+          </div>
           {page === "list" && items.length > 0 && (
             <div style={{ display: "flex" }}>
               <button onClick={shareList} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "8px 12px", fontFamily: T.font }}>{t('list.share')}</button>
@@ -851,6 +902,27 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {/* List tabs */}
+        {page === "list" && (
+          <div style={{ display: "flex", gap: 4, padding: "0 12px 8px", justifyContent: "center" }}>
+            <button onClick={() => switchList("my")} style={{
+              background: activeList === "my" ? "white" : "transparent",
+              color: activeList === "my" ? T.primary : "rgba(255,255,255,0.7)",
+              border: "none", borderRadius: 20, padding: "4px 16px",
+              fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: T.font,
+              transition: "background 0.18s, color 0.18s",
+            }}>👤 My List</button>
+            <button onClick={() => switchList("family")} style={{
+              background: activeList === "family" ? "white" : "transparent",
+              color: activeList === "family" ? T.primary : "rgba(255,255,255,0.7)",
+              border: "none", borderRadius: 20, padding: "4px 16px",
+              fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: T.font,
+              transition: "background 0.18s, color 0.18s",
+            }}>👨‍👩‍👧 Family</button>
+          </div>
+        )}
+
         {page === "list" && items.length > 0 && (
           <div style={{ height: 3, background: "rgba(255,255,255,0.25)" }}>
             <div style={{ height: "100%", background: "rgba(255,255,255,0.85)", width: pct + "%", transition: "width 0.4s ease" }} />
@@ -868,6 +940,7 @@ export default function App() {
           todo={todo} done={done} toggle={toggle} deleteItem={deleteItem}
           doneOpen={doneOpen} setDoneOpen={setDoneOpen}
           newItemId={newItemId} removingId={removingId}
+          activeList={activeList}
         />
       )}
       {page === "history" && (
@@ -879,7 +952,64 @@ export default function App() {
           history={history} setHistory={() => {}}
           memory={memory} setMemory={setMemory} showToast={showToast}
           user={user} logout={logout}
+          activeList={activeList}
         />
+      )}
+
+      {/* Floating Move/Copy button */}
+      {showFAB && (
+        <div style={{
+          position: "fixed", bottom: 72, left: "50%", transform: "translateX(-50%)",
+          zIndex: 90, display: "flex", justifyContent: "center",
+        }}>
+          <button onClick={() => setShowMoveModal(true)} style={{
+            background: T.secondary, color: "white", border: "none",
+            borderRadius: 25, padding: "10px 22px",
+            fontSize: 14, fontWeight: 700, cursor: "pointer",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+            display: "flex", alignItems: "center", gap: 8, fontFamily: T.font,
+          }}>
+            {activeList === "my" ? "👨‍👩‍👧 Move to Family List" : "👤 Copy to My List"}
+          </button>
+        </div>
+      )}
+
+      {/* Move/Copy Confirmation Modal */}
+      {showMoveModal && (
+        <div onClick={() => setShowMoveModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 500 }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            position: "fixed", bottom: 0, left: 0, right: 0, maxWidth: 430, margin: "0 auto",
+            background: T.surface, borderRadius: "24px 24px 0 0", padding: 24,
+            animation: "slideUp 0.25s ease", fontFamily: T.font,
+          }}>
+            <div style={{ textAlign: "center", fontSize: 48, marginBottom: 12 }}>
+              {activeList === "my" ? "👨‍👩‍👧" : "👤"}
+            </div>
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 18, color: isDark ? "rgba(255,255,255,0.9)" : "#212121", marginBottom: 8 }}>
+              {activeList === "my" ? "Move to Family List?" : "Copy to My List?"}
+            </div>
+            <div style={{ textAlign: "center", fontSize: 14, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", marginBottom: 28, lineHeight: 1.5 }}>
+              {activeList === "my"
+                ? "These items will be added to the shared family list and removed from your personal list."
+                : "A copy of these items will be saved to your personal list."}
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowMoveModal(false)} style={{
+                flex: 1, padding: "14px 0", borderRadius: 14, cursor: "pointer", fontFamily: T.font,
+                fontSize: 15, fontWeight: 700, background: "none",
+                border: "2px solid " + (isDark ? "rgba(255,255,255,0.2)" : "#e0e0e0"),
+                color: isDark ? "rgba(255,255,255,0.8)" : "#424242",
+              }}>Cancel</button>
+              <button onClick={activeList === "my" ? handleMoveToFamily : handleCopyToMyList} style={{
+                flex: 1, padding: "14px 0", borderRadius: 14, cursor: "pointer", fontFamily: T.font,
+                fontSize: 15, fontWeight: 700, border: "none",
+                background: T.secondary, color: "white",
+              }}>
+                {activeList === "my" ? "Move & Switch" : "Copy & Switch"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Clear Confirmation Modal */}
@@ -892,7 +1022,9 @@ export default function App() {
           }}>
             <div style={{ textAlign: "center", fontSize: 48, marginBottom: 12 }}>🛒</div>
             <div style={{ textAlign: "center", fontWeight: 700, fontSize: 18, color: isDark ? "rgba(255,255,255,0.9)" : "#212121", marginBottom: 8 }}>{t('clear.title')}</div>
-            <div style={{ textAlign: "center", fontSize: 14, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", marginBottom: 28, lineHeight: 1.5 }}>{t('clear.subtitle')}</div>
+            <div style={{ textAlign: "center", fontSize: 14, color: isDark ? "rgba(255,255,255,0.5)" : "#757575", marginBottom: 28, lineHeight: 1.5 }}>
+              {activeList === "my" ? "Saved to your personal history" : "Saved to family history"}
+            </div>
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => setShowClearModal(false)} style={{
                 flex: 1, padding: "14px 0", borderRadius: 14, cursor: "pointer", fontFamily: T.font,

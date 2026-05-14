@@ -3,11 +3,18 @@ import { supabase } from './supabase';
 
 const FAMILY_ID = 'family_komemi';
 
-export function useShoppingList() {
+function load(key, def) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? def; } catch { return def; }
+}
+function persist(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+export function useShoppingList(listType = "family") {
   const [user, setUser] = useState(null);
-  const [items, setItems] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState(() => listType === "my" ? load("myListItems", []) : []);
+  const [history, setHistory] = useState(() => listType === "my" ? load("myListHistory", []) : []);
+  const [loading, setLoading] = useState(() => listType !== "my");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -20,10 +27,19 @@ export function useShoppingList() {
   }, []);
 
   useEffect(() => {
+    if (listType === "my") {
+      setItems(load("myListItems", []));
+      setHistory(load("myListHistory", []));
+      setLoading(false);
+      return;
+    }
+
     if (!user) {
       setLoading(false);
       return;
     }
+
+    setLoading(true);
 
     supabase.from('families')
       .upsert({ id: FAMILY_ID })
@@ -61,9 +77,21 @@ export function useShoppingList() {
       .then(({ data }) => setHistory(data || []));
 
     return () => supabase.removeChannel(channel);
-  }, [user]);
+  }, [user, listType]);
 
   async function addItem(name, qty = '', emoji = '🛒') {
+    if (listType === "my") {
+      const newItem = {
+        id: `my-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name, qty, emoji, done: false,
+        added_by: user?.user_metadata?.full_name || 'Someone',
+        created_at: new Date().toISOString(),
+      };
+      const updated = [newItem, ...load("myListItems", [])];
+      persist("myListItems", updated);
+      setItems(updated);
+      return newItem;
+    }
     const { data } = await supabase.from('items').insert({
       family_id: FAMILY_ID,
       name, qty, emoji,
@@ -74,6 +102,16 @@ export function useShoppingList() {
   }
 
   async function toggleItem(id, currentDone) {
+    if (listType === "my") {
+      const updated = load("myListItems", []).map(item =>
+        item.id === id
+          ? { ...item, done: !currentDone, done_by: !currentDone ? (user?.user_metadata?.full_name || 'Someone') : null }
+          : item
+      );
+      persist("myListItems", updated);
+      setItems(updated);
+      return;
+    }
     await supabase.from('items').update({
       done: !currentDone,
       done_by: !currentDone
@@ -83,11 +121,34 @@ export function useShoppingList() {
   }
 
   async function deleteItem(id) {
+    if (listType === "my") {
+      const updated = load("myListItems", []).filter(item => item.id !== id);
+      persist("myListItems", updated);
+      setItems(updated);
+      return;
+    }
     await supabase.from('items').delete().eq('id', id);
   }
 
   async function clearItems(historyLimit) {
     if (items.length === 0) return;
+    if (listType === "my") {
+      const currentItems = load("myListItems", []);
+      const entry = {
+        id: `hist-${Date.now()}`,
+        date: new Date().toLocaleDateString('en-GB',
+          { day: 'numeric', month: 'short', year: 'numeric' }),
+        items: currentItems,
+        saved_by: user?.user_metadata?.full_name || 'Someone',
+        created_at: new Date().toISOString(),
+      };
+      const updatedHistory = [entry, ...load("myListHistory", [])].slice(0, historyLimit);
+      persist("myListHistory", updatedHistory);
+      persist("myListItems", []);
+      setHistory(updatedHistory);
+      setItems([]);
+      return;
+    }
     await supabase.from('history').insert({
       family_id: FAMILY_ID,
       date: new Date().toLocaleDateString('en-GB',
@@ -116,6 +177,20 @@ export function useShoppingList() {
 
   async function restoreHistory(entry) {
     if (!entry.items?.length) return;
+    if (listType === "my") {
+      const restoredItems = entry.items.map((item, i) => ({
+        id: `my-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 5)}`,
+        name: item.name,
+        qty: item.qty || '',
+        emoji: item.emoji || '🛒',
+        done: false,
+        added_by: user?.user_metadata?.full_name || 'Someone',
+        created_at: new Date().toISOString(),
+      }));
+      persist("myListItems", restoredItems);
+      setItems(restoredItems);
+      return;
+    }
     const newItems = entry.items.map(item => ({
       family_id: FAMILY_ID,
       name: item.name,
@@ -125,6 +200,16 @@ export function useShoppingList() {
       added_by: user?.user_metadata?.full_name || 'Someone',
     }));
     await supabase.from('items').insert(newItems);
+  }
+
+  async function addItemToFamily(name, qty = '', emoji = '🛒') {
+    const { data } = await supabase.from('items').insert({
+      family_id: FAMILY_ID,
+      name, qty, emoji,
+      done: false,
+      added_by: user?.user_metadata?.full_name || 'Someone',
+    }).select().single();
+    return data;
   }
 
   const login = () => supabase.auth.signInWithOAuth({
@@ -137,6 +222,7 @@ export function useShoppingList() {
   return {
     user, loading, items, history,
     addItem, toggleItem, deleteItem,
-    clearItems, restoreHistory, login, logout
+    clearItems, restoreHistory, addItemToFamily,
+    login, logout
   };
 }
